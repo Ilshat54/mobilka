@@ -286,6 +286,20 @@ export const SkillProvider = ({ children }) => {
     return chatId;
   };
 
+  // Получить конкретный чат по ID
+  const getChat = (chatId) => {
+    return chats.find(chat => chat.id === chatId);
+  };
+
+  // Отправить сообщение в чат
+  const sendMessage = (chatId, text) => {
+    const messageData = {
+      text,
+      senderId: currentUser.id,
+    };
+    addMessage(chatId, messageData);
+  };
+
   // Получить чаты текущего пользователя
   const getMyChats = () => {
     return chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -311,6 +325,8 @@ export const SkillProvider = ({ children }) => {
       createChat,
       searchOffers,
       getMyChats,
+      getChat,
+      sendMessage,
       markAsRead,
       updateProfile,
       deleteProfile,

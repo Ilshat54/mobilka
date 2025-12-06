@@ -365,19 +365,6 @@ const HomeScreen = ({ navigation }) => {
           )}
         </Animated.View>
 
-        <Animated.View 
-          style={[
-            styles.header,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }
-          ]}
-        >
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Доступные обмены</Text>
-          <Text style={[styles.offersCount, { color: colors.textSecondary }]}>{filteredOffers.length} предложений</Text>
-        </Animated.View>
-
         {filteredOffers && filteredOffers.length > 0 ? (
           <FlatList
             data={filteredOffers}
@@ -385,6 +372,11 @@ const HomeScreen = ({ navigation }) => {
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
+            ListHeaderComponent={
+              <View style={styles.header}>
+                <Text style={[styles.offersCount, { color: colors.textSecondary }]}>{filteredOffers.length} предложений</Text>
+              </View>
+            }
           />
         ) : (
           <View style={styles.emptyContainer}>

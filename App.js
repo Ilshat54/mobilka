@@ -14,6 +14,7 @@ import { SkillProvider } from './src/context/SkillContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import MessagesScreen from './src/screens/MessagesScreen';
 import OfferDetailScreen from './src/screens/OfferDetailScreen';
+import ChatScreen from './src/screens/ChatScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -79,6 +80,47 @@ function AppContent() {
           options={{ 
             title: 'Детали заявки',
             headerBackTitle: 'Назад',
+            gestureEnabled: true,
+            cardStyleInterpolator: ({ current, layouts }) => ({
+              cardStyle: {
+                transform: [
+                  {
+                    translateX: current.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [layouts.screen.width, 0],
+                    }),
+                  },
+                ],
+              },
+              overlayStyle: {
+                opacity: current.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.5],
+                }),
+              },
+            }),
+            transitionSpec: {
+              open: {
+                animation: 'timing',
+                config: {
+                  duration: 300,
+                },
+              },
+              close: {
+                animation: 'timing',
+                config: {
+                  duration: 300,
+                },
+              },
+            },
+          }}
+        />
+        {/* Экран чата */}
+        <Stack.Screen 
+          name="Chat" 
+          component={ChatScreen}
+          options={{ 
+            headerShown: false,
             gestureEnabled: true,
             cardStyleInterpolator: ({ current, layouts }) => ({
               cardStyle: {
