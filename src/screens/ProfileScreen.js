@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,40 @@ import {
   TextInput,
   Alert,
   Modal,
+  Animated,
+  SafeAreaView,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSkill } from '../context/SkillContext';
+import { useTheme } from '../context/ThemeContext';
 
 const ProfileScreen = ({ navigation }) => {
-  const { user, offers, addOffer, deleteOffer, updateProfile, deleteProfile } = useSkill();
+  const { user, offers, addOffer, deleteOffer, updateOffer, updateProfile, deleteProfile } = useSkill();
+  const { colors, theme, toggleTheme } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingOffer, setIsEditingOffer] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  
+  // Анимации
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
   
   const [userInfo, setUserInfo] = useState({
     name: user?.name || '',
@@ -160,53 +185,83 @@ const ProfileScreen = ({ navigation }) => {
   const myOffers = offers.filter(offer => offer.userId === user.id);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Заголовок с кнопкой удаления профиля */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Профиль</Text>
-          <TouchableOpacity 
-            style={styles.deleteProfileButton}
-            onPress={() => setShowDeleteModal(true)}
-          >
-            <Ionicons name="trash-outline" size={20} color="#ff4444" />
-          </TouchableOpacity>
+        {/* Заголовок с кнопкой удаления профиля и переключателем темы */}
+        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Профиль</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={styles.themeButton}
+              onPress={toggleTheme}
+            >
+              <Ionicons 
+                name={theme === 'dark' ? 'moon' : 'sunny'} 
+                size={20} 
+                color={colors.primary} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.deleteProfileButton}
+              onPress={() => setShowDeleteModal(true)}
+            >
+              <Ionicons name="trash-outline" size={20} color={colors.error} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Информация пользователя */}
-        <View style={styles.profileCard}>
+        <Animated.View 
+          style={[
+            styles.profileCard,
+            { 
+              backgroundColor: colors.cardBackground,
+              shadowColor: colors.shadow,
+            },
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }
+          ]}
+        >
           <View style={styles.avatarSection}>
             <Text style={styles.avatar}>{user.avatar}</Text>
             <View style={styles.userInfo}>
               {isEditing ? (
                 <TextInput
-                  style={styles.nameInput}
+                  style={[styles.nameInput, { color: colors.text, borderBottomColor: colors.primary }]}
                   value={userInfo.name}
                   onChangeText={(text) => setUserInfo({ ...userInfo, name: text })}
                   placeholder="Ваше имя"
+                  placeholderTextColor={colors.textTertiary}
                 />
               ) : (
-                <Text style={styles.userName}>{user.name}</Text>
+                <Text style={[styles.userName, { color: colors.text }]}>{user.name}</Text>
               )}
-              <Text style={styles.userId}>ID: {user.id}</Text>
+              <Text style={[styles.userId, { color: colors.textSecondary }]}>ID: {user.id}</Text>
             </View>
           </View>
 
           <View style={styles.skillsSection}>
-            <Text style={styles.sectionTitle}>Мои навыки</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Мои навыки</Text>
             {isEditing ? (
               <TextInput
-                style={styles.skillsInput}
+                style={[styles.skillsInput, { 
+                  borderColor: colors.border, 
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text 
+                }]}
                 value={userInfo.skills}
                 onChangeText={(text) => setUserInfo({ ...userInfo, skills: text })}
                 placeholder="Навыки через запятую"
+                placeholderTextColor={colors.textTertiary}
                 multiline
               />
             ) : (
               <View style={styles.skillsList}>
                 {user.skills.map((skill, index) => (
-                  <View key={index} style={styles.skillTag}>
-                    <Text style={styles.skillText}>💡 {skill}</Text>
+                  <View key={index} style={[styles.skillTag, { backgroundColor: colors.primaryLight }]}>
+                    <Text style={[styles.skillText, { color: colors.primary }]}>💡 {skill}</Text>
                   </View>
                 ))}
               </View>
@@ -214,7 +269,7 @@ const ProfileScreen = ({ navigation }) => {
           </View>
 
           <TouchableOpacity
-            style={styles.editButton}
+            style={[styles.editButton, { backgroundColor: colors.primary }]}
             onPress={() => isEditing ? handleSaveProfile() : setIsEditing(true)}
           >
             <Ionicons 
@@ -226,60 +281,95 @@ const ProfileScreen = ({ navigation }) => {
               {isEditing ? 'Сохранить' : 'Редактировать профиль'}
             </Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Мои заявки */}
-        <View style={styles.section}>
+        <Animated.View 
+          style={[
+            styles.section,
+            { 
+              backgroundColor: colors.cardBackground,
+              shadowColor: colors.shadow,
+            },
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }
+          ]}
+        >
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Мои заявки</Text>
-            <Text style={styles.offersCount}>{myOffers.length} заявок</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Мои заявки</Text>
+            <Text style={[styles.offersCount, { color: colors.textSecondary }]}>{myOffers.length} заявок</Text>
           </View>
 
           {myOffers.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="document-text" size={48} color="#ccc" />
-              <Text style={styles.emptyStateText}>У вас пока нет заявок</Text>
+              <Ionicons name="document-text" size={48} color={colors.textTertiary} />
+              <Text style={[styles.emptyStateText, { color: colors.textTertiary }]}>У вас пока нет заявок</Text>
             </View>
           ) : (
             myOffers.map(offer => (
-              <View key={offer.id} style={styles.offerItem}>
+              <View key={offer.id} style={[styles.offerItem, { 
+                backgroundColor: colors.inputBackground,
+                borderLeftColor: colors.primary 
+              }]}>
                 {isEditingOffer === offer.id ? (
                   // Режим редактирования заявки
                   <View style={styles.editOfferForm}>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { 
+                        borderColor: colors.border, 
+                        backgroundColor: colors.inputBackground,
+                        color: colors.text 
+                      }]}
                       placeholder="Название заявки"
+                      placeholderTextColor={colors.textTertiary}
                       value={editingOffer.title}
                       onChangeText={(text) => setEditingOffer({ ...editingOffer, title: text })}
                     />
                     <TextInput
-                      style={[styles.input, styles.textArea]}
+                      style={[styles.input, styles.textArea, { 
+                        borderColor: colors.border, 
+                        backgroundColor: colors.inputBackground,
+                        color: colors.text 
+                      }]}
                       placeholder="Описание"
+                      placeholderTextColor={colors.textTertiary}
                       value={editingOffer.description}
                       onChangeText={(text) => setEditingOffer({ ...editingOffer, description: text })}
                       multiline
                     />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { 
+                        borderColor: colors.border, 
+                        backgroundColor: colors.inputBackground,
+                        color: colors.text 
+                      }]}
                       placeholder="Навыки для изучения"
+                      placeholderTextColor={colors.textTertiary}
                       value={editingOffer.skillsToLearn}
                       onChangeText={(text) => setEditingOffer({ ...editingOffer, skillsToLearn: text })}
                     />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { 
+                        borderColor: colors.border, 
+                        backgroundColor: colors.inputBackground,
+                        color: colors.text 
+                      }]}
                       placeholder="Навыки для обучения"
+                      placeholderTextColor={colors.textTertiary}
                       value={editingOffer.skillsToTeach}
                       onChangeText={(text) => setEditingOffer({ ...editingOffer, skillsToTeach: text })}
                     />
                     <View style={styles.editActions}>
                       <TouchableOpacity 
-                        style={styles.saveButton}
+                        style={[styles.saveButton, { backgroundColor: colors.secondary }]}
                         onPress={() => handleSaveOffer(offer.id)}
                       >
                         <Text style={styles.saveButtonText}>Сохранить</Text>
                       </TouchableOpacity>
                       <TouchableOpacity 
-                        style={styles.cancelButton}
+                        style={[styles.cancelButton, { backgroundColor: colors.textTertiary }]}
                         onPress={handleCancelEdit}
                       >
                         <Text style={styles.cancelButtonText}>Отмена</Text>
@@ -293,13 +383,13 @@ const ProfileScreen = ({ navigation }) => {
                       style={styles.offerContent}
                       onPress={() => navigation.navigate('OfferDetail', { offer })}
                     >
-                      <Text style={styles.offerItemTitle}>{offer.title}</Text>
-                      <Text style={styles.offerItemDate}>
+                      <Text style={[styles.offerItemTitle, { color: colors.text }]}>{offer.title}</Text>
+                      <Text style={[styles.offerItemDate, { color: colors.textSecondary }]}>
                         {new Date(offer.createdAt).toLocaleDateString('ru-RU')}
                       </Text>
                       <View style={styles.offerStatus}>
-                        <View style={styles.statusDot} />
-                        <Text style={styles.statusText}>Активна</Text>
+                        <View style={[styles.statusDot, { backgroundColor: colors.secondary }]} />
+                        <Text style={[styles.statusText, { color: colors.secondary }]}>Активна</Text>
                       </View>
                     </TouchableOpacity>
                     
@@ -308,13 +398,13 @@ const ProfileScreen = ({ navigation }) => {
                         style={styles.offerActionButton}
                         onPress={() => handleEditOffer(offer)}
                       >
-                        <Ionicons name="pencil" size={16} color="#007AFF" />
+                        <Ionicons name="pencil" size={16} color={colors.primary} />
                       </TouchableOpacity>
                       <TouchableOpacity 
                         style={styles.offerActionButton}
                         onPress={() => handleDeleteOffer(offer.id)}
                       >
-                        <Ionicons name="trash" size={16} color="#ff4444" />
+                        <Ionicons name="trash" size={16} color={colors.error} />
                       </TouchableOpacity>
                     </View>
                   </>
@@ -322,23 +412,33 @@ const ProfileScreen = ({ navigation }) => {
               </View>
             ))
           )}
-        </View>
+        </Animated.View>
 
         {/* Создание новой заявки */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Создать новую заявку</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Создать новую заявку</Text>
           
           <View style={styles.form}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { 
+                borderColor: colors.border, 
+                backgroundColor: colors.inputBackground,
+                color: colors.text 
+              }]}
               placeholder="Название заявки *"
+              placeholderTextColor={colors.textTertiary}
               value={newOffer.title}
               onChangeText={(text) => setNewOffer({ ...newOffer, title: text })}
             />
             
             <TextInput
-              style={[styles.input, styles.textArea]}
+              style={[styles.input, styles.textArea, { 
+                borderColor: colors.border, 
+                backgroundColor: colors.inputBackground,
+                color: colors.text 
+              }]}
               placeholder="Описание *"
+              placeholderTextColor={colors.textTertiary}
               value={newOffer.description}
               onChangeText={(text) => setNewOffer({ ...newOffer, description: text })}
               multiline
@@ -346,41 +446,61 @@ const ProfileScreen = ({ navigation }) => {
             />
             
             <TextInput
-              style={styles.input}
+              style={[styles.input, { 
+                borderColor: colors.border, 
+                backgroundColor: colors.inputBackground,
+                color: colors.text 
+              }]}
               placeholder="Навыки, которым хочу научиться * (через запятую)"
+              placeholderTextColor={colors.textTertiary}
               value={newOffer.skillsToLearn}
               onChangeText={(text) => setNewOffer({ ...newOffer, skillsToLearn: text })}
             />
             
             <TextInput
-              style={styles.input}
+              style={[styles.input, { 
+                borderColor: colors.border, 
+                backgroundColor: colors.inputBackground,
+                color: colors.text 
+              }]}
               placeholder="Навыки, которым могу научить * (через запятую)"
+              placeholderTextColor={colors.textTertiary}
               value={newOffer.skillsToTeach}
               onChangeText={(text) => setNewOffer({ ...newOffer, skillsToTeach: text })}
             />
             
             <TextInput
-              style={styles.input}
+              style={[styles.input, { 
+                borderColor: colors.border, 
+                backgroundColor: colors.inputBackground,
+                color: colors.text 
+              }]}
               placeholder="Местоположение (необязательно)"
+              placeholderTextColor={colors.textTertiary}
               value={newOffer.location}
               onChangeText={(text) => setNewOffer({ ...newOffer, location: text })}
             />
 
             <View style={styles.formatSelector}>
-              <Text style={styles.formatLabel}>Формат обучения:</Text>
+              <Text style={[styles.formatLabel, { color: colors.text }]}>Формат обучения:</Text>
               <View style={styles.formatOptions}>
                 {['online', 'offline', 'both'].map(format => (
                   <TouchableOpacity
                     key={format}
                     style={[
                       styles.formatOption,
-                      newOffer.learningFormat === format && styles.formatOptionActive
+                      { borderColor: colors.border },
+                      newOffer.learningFormat === format && { 
+                        backgroundColor: colors.primary,
+                        borderColor: colors.primary 
+                      }
                     ]}
                     onPress={() => setNewOffer({ ...newOffer, learningFormat: format })}
                   >
                     <Text style={[
                       styles.formatOptionText,
-                      newOffer.learningFormat === format && styles.formatOptionTextActive
+                      { color: colors.text },
+                      newOffer.learningFormat === format && { color: 'white' }
                     ]}>
                       {format === 'online' ? 'Онлайн' : 
                        format === 'offline' ? 'Оффлайн' : 'Оба'}
@@ -391,7 +511,7 @@ const ProfileScreen = ({ navigation }) => {
             </View>
 
             <TouchableOpacity 
-              style={styles.createButton}
+              style={[styles.createButton, { backgroundColor: colors.primary }]}
               onPress={handleCreateOffer}
             >
               <Ionicons name="add-circle" size={20} color="white" />
@@ -408,20 +528,20 @@ const ProfileScreen = ({ navigation }) => {
         animationType="fade"
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Удаление профиля</Text>
-            <Text style={styles.modalText}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Удаление профиля</Text>
+            <Text style={[styles.modalText, { color: colors.textSecondary }]}>
               Вы уверены, что хотите удалить профиль? Все ваши данные и заявки будут удалены.
             </Text>
             <View style={styles.modalActions}>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]}
+                style={[styles.modalButton, { backgroundColor: colors.textTertiary }]}
                 onPress={() => setShowDeleteModal(false)}
               >
-                <Text style={styles.cancelButtonText}>Отмена</Text>
+                <Text style={[styles.cancelButtonText, { color: 'white' }]}>Отмена</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.deleteButton]}
+                style={[styles.modalButton, { backgroundColor: colors.error }]}
                 onPress={handleDeleteProfile}
               >
                 <Text style={styles.deleteButtonText}>Удалить</Text>
@@ -430,43 +550,44 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
     textAlign: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  themeButton: {
+    padding: 8,
   },
   deleteProfileButton: {
     padding: 8,
   },
   profileCard: {
-    backgroundColor: 'white',
     margin: 16,
     padding: 20,
     borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.06)',
+    elevation: 2,
   },
   avatarSection: {
     flexDirection: 'row',
@@ -483,20 +604,16 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 4,
   },
   nameInput: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
     borderBottomWidth: 1,
-    borderBottomColor: '#007AFF',
     paddingVertical: 4,
   },
   userId: {
     fontSize: 14,
-    color: '#666',
   },
   skillsSection: {
     marginBottom: 20,
@@ -504,12 +621,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 12,
   },
   skillsInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
@@ -521,7 +636,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   skillTag: {
-    backgroundColor: '#E3F2FD',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -530,14 +644,12 @@ const styles = StyleSheet.create({
   },
   skillText: {
     fontSize: 12,
-    color: '#1976D2',
     fontWeight: '500',
   },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#007AFF',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 12,
@@ -548,16 +660,12 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   section: {
-    backgroundColor: 'white',
     margin: 16,
     marginTop: 0,
     padding: 20,
     borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.06)',
+    elevation: 2,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -567,7 +675,6 @@ const styles = StyleSheet.create({
   },
   offersCount: {
     fontSize: 14,
-    color: '#666',
     fontWeight: '500',
   },
   emptyState: {
@@ -576,18 +683,15 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
     marginTop: 12,
   },
   offerItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#f8f9fa',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
   },
   offerContent: {
     flex: 1,
@@ -595,12 +699,10 @@ const styles = StyleSheet.create({
   offerItemTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
     marginBottom: 4,
   },
   offerItemDate: {
     fontSize: 12,
-    color: '#666',
     marginBottom: 8,
   },
   offerStatus: {
@@ -611,12 +713,10 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
     marginRight: 6,
   },
   statusText: {
     fontSize: 12,
-    color: '#4CAF50',
     fontWeight: '500',
   },
   offerActions: {
@@ -632,12 +732,10 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
     marginBottom: 12,
-    backgroundColor: '#fafafa',
   },
   textArea: {
     minHeight: 80,
@@ -649,7 +747,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   saveButton: {
-    backgroundColor: '#28a745',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 6,
@@ -659,7 +756,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cancelButton: {
-    backgroundColor: '#6c757d',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 6,
@@ -677,7 +773,6 @@ const styles = StyleSheet.create({
   formatLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
     marginBottom: 8,
   },
   formatOptions: {
@@ -688,28 +783,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
     alignItems: 'center',
     marginRight: 8,
     borderRadius: 8,
   },
-  formatOptionActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
   formatOptionText: {
     fontSize: 12,
-    color: '#666',
     fontWeight: '500',
-  },
-  formatOptionTextActive: {
-    color: 'white',
   },
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#28a745',
     paddingVertical: 14,
     borderRadius: 12,
   },
@@ -726,7 +811,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: 'white',
     padding: 24,
     borderRadius: 16,
     margin: 20,
@@ -735,12 +819,10 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 12,
   },
   modalText: {
     fontSize: 16,
-    color: '#666',
     marginBottom: 24,
     lineHeight: 20,
   },
@@ -754,14 +836,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 8,
   },
-  cancelButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  deleteButton: {
-    backgroundColor: '#ff4444',
-  },
   cancelButtonText: {
-    color: '#333',
     fontWeight: '600',
   },
   deleteButtonText: {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,302 @@ import {
   TextInput,
   TouchableOpacity,
   SafeAreaView,
+  Animated,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSkill } from '../context/SkillContext';
+import { useTheme } from '../context/ThemeContext';
+
+// Стили должны быть определены до использования в компонентах
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
+  content: {
+    flex: 1,
+    paddingTop: 8,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: 16,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.06)',
+    elevation: 2,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  offersCount: {
+    fontSize: 14,
+  },
+  listContent: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  card: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.06)',
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  offerDate: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  offerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  offerDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  skillsContainer: {
+    marginBottom: 12,
+  },
+  skillSection: {
+    marginBottom: 8,
+  },
+  skillLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  skillsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  skillTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 6,
+    marginBottom: 4,
+  },
+  teachTag: {
+  },
+  skillText: {
+    fontSize: 12,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  formatBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  formatText: {
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  locationText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+});
+
+// Отдельный компонент для карточки предложения
+const OfferCard = ({ item, index, colors, navigation }) => {
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    Animated.timing(cardAnim, {
+      toValue: 1,
+      duration: 300,
+      delay: index * 50,
+      useNativeDriver: true,
+    }).start();
+  }, [index]);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: cardAnim,
+        transform: [{
+          translateY: cardAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [20, 0],
+          }),
+        }],
+      }}
+    >
+      <TouchableOpacity 
+        style={[styles.card, { 
+          backgroundColor: colors.cardBackground,
+          shadowColor: colors.shadow,
+        }]}
+        onPress={() => navigation.navigate('OfferDetail', { offer: item })}
+        activeOpacity={0.7}
+      >
+        <View style={styles.cardHeader}>
+          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+            <Text style={styles.avatarText}>{item.userAvatar}</Text>
+          </View>
+          <View style={styles.userInfo}>
+            <Text style={[styles.userName, { color: colors.text }]}>{item.userName}</Text>
+            <Text style={[styles.offerDate, { color: colors.textTertiary }]}>
+              {new Date(item.createdAt).toLocaleDateString('ru-RU')}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={[styles.offerTitle, { color: colors.primary }]}>{item.title}</Text>
+        <Text style={[styles.offerDescription, { color: colors.textSecondary }]}>{item.description}</Text>
+
+        <View style={styles.skillsContainer}>
+          <View style={styles.skillSection}>
+            <Text style={[styles.skillLabel, { color: colors.textTertiary }]}>Хочу научиться:</Text>
+            <View style={styles.skillsList}>
+              {item.skillsToLearn.map((skill, skillIndex) => (
+                <View key={skillIndex} style={[styles.skillTag, { backgroundColor: colors.skillTagLearn }]}>
+                  <Text style={[styles.skillText, { color: colors.text }]}>🎯 {skill}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.skillSection}>
+            <Text style={[styles.skillLabel, { color: colors.textTertiary }]}>Могу научить:</Text>
+            <View style={styles.skillsList}>
+              {item.skillsToTeach.map((skill, skillIndex) => (
+                <View key={skillIndex} style={[styles.skillTag, styles.teachTag, { backgroundColor: colors.skillTagTeach }]}>
+                  <Text style={[styles.skillText, { color: colors.text }]}>💡 {skill}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.cardFooter}>
+          <View style={[styles.formatBadge, { backgroundColor: colors.inputBackground }]}>
+            <Ionicons 
+              name={item.learningFormat === 'online' ? 'wifi' : 
+                    item.learningFormat === 'offline' ? 'location' : 'phone-portrait'} 
+              size={14} 
+              color={colors.textSecondary} 
+            />
+            <Text style={[styles.formatText, { color: colors.textSecondary }]}>
+              {item.learningFormat === 'online' ? 'Онлайн' : 
+               item.learningFormat === 'offline' ? 'Оффлайн' : 'Оба формата'}
+            </Text>
+          </View>
+          {item.location && (
+            <Text style={[styles.locationText, { color: colors.textSecondary }]}>{item.location}</Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
 
 const HomeScreen = ({ navigation }) => {
   const { offers } = useSkill();
+  const { colors } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredOffers, setFilteredOffers] = useState(offers);
+  const [filteredOffers, setFilteredOffers] = useState(offers || []);
+  
+  // Анимации
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  // Обновляем filteredOffers когда offers изменяется
+  useEffect(() => {
+    if (searchQuery === '') {
+      setFilteredOffers(offers || []);
+    } else {
+      const filtered = (offers || []).filter(offer =>
+        offer.skillsToLearn?.some(skill => 
+          skill.toLowerCase().includes(searchQuery.toLowerCase())
+        ) ||
+        offer.skillsToTeach?.some(skill => 
+          skill.toLowerCase().includes(searchQuery.toLowerCase())
+        ) ||
+        offer.title?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredOffers(filtered);
+    }
+  }, [offers, searchQuery]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -34,267 +322,80 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
-  const renderOfferCard = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.card}
-      onPress={() => navigation.navigate('OfferDetail', { offer: item })}
-    >
-      <View style={styles.cardHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{item.userAvatar}</Text>
-        </View>
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.userName}</Text>
-          <Text style={styles.offerDate}>
-            {new Date(item.createdAt).toLocaleDateString('ru-RU')}
-          </Text>
-        </View>
-      </View>
-
-      <Text style={styles.offerTitle}>{item.title}</Text>
-      <Text style={styles.offerDescription}>{item.description}</Text>
-
-      <View style={styles.skillsContainer}>
-        <View style={styles.skillSection}>
-          <Text style={styles.skillLabel}>Хочу научиться:</Text>
-          <View style={styles.skillsList}>
-            {item.skillsToLearn.map((skill, index) => (
-              <View key={index} style={styles.skillTag}>
-                <Text style={styles.skillText}>🎯 {skill}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.skillSection}>
-          <Text style={styles.skillLabel}>Могу научить:</Text>
-          <View style={styles.skillsList}>
-            {item.skillsToTeach.map((skill, index) => (
-              <View key={index} style={[styles.skillTag, styles.teachTag]}>
-                <Text style={styles.skillText}>💡 {skill}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.cardFooter}>
-        <View style={styles.formatBadge}>
-          <Ionicons 
-            name={item.learningFormat === 'online' ? 'wifi' : 
-                  item.learningFormat === 'offline' ? 'location' : 'phone-portrait'} 
-            size={14} 
-            color="#666" 
-          />
-          <Text style={styles.formatText}>
-            {item.learningFormat === 'online' ? 'Онлайн' : 
-             item.learningFormat === 'offline' ? 'Оффлайн' : 'Оба формата'}
-          </Text>
-        </View>
-        {item.location && (
-          <Text style={styles.locationText}>{item.location}</Text>
-        )}
-      </View>
-    </TouchableOpacity>
+  const renderOfferCard = ({ item, index }) => (
+    <OfferCard item={item} index={index} colors={colors} navigation={navigation} />
   );
 
+  if (!colors) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Загрузка...</Text>
+      </View>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+        <Animated.View
+          style={[
+            styles.searchContainer,
+            {
+              backgroundColor: colors.surface,
+              shadowColor: colors.shadow,
+            },
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }
+          ]}
+        >
+          <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text }]}
             placeholder="Найти навыки..."
+            placeholderTextColor={colors.textTertiary}
             value={searchQuery}
             onChangeText={handleSearch}
           />
           {searchQuery !== '' && (
             <TouchableOpacity onPress={() => handleSearch('')}>
-              <Ionicons name="close-circle" size={20} color="#666" />
+              <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           )}
-        </View>
+        </Animated.View>
 
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Доступные обмены</Text>
-          <Text style={styles.offersCount}>{filteredOffers.length} предложений</Text>
-        </View>
+        <Animated.View 
+          style={[
+            styles.header,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }
+          ]}
+        >
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Доступные обмены</Text>
+          <Text style={[styles.offersCount, { color: colors.textSecondary }]}>{filteredOffers.length} предложений</Text>
+        </Animated.View>
 
-        <FlatList
-          data={filteredOffers}
-          renderItem={renderOfferCard}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-        />
+        {filteredOffers && filteredOffers.length > 0 ? (
+          <FlatList
+            data={filteredOffers}
+            renderItem={renderOfferCard}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+          />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              Нет доступных предложений
+            </Text>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  content: {
-    flex: 1,
-    paddingTop: 8, // Добавили отступ от статус бара
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    margin: 16,
-    marginTop: 8, // Уменьшили верхний отступ
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  offersCount: {
-    fontSize: 14,
-    color: '#666',
-  },
-  listContent: {
-    padding: 16,
-    paddingTop: 0,
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  offerDate: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
-  },
-  offerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#007AFF',
-    marginBottom: 8,
-  },
-  offerDescription: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  skillsContainer: {
-    marginBottom: 12,
-  },
-  skillSection: {
-    marginBottom: 8,
-  },
-  skillLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#999',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-  },
-  skillsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  skillTag: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 6,
-    marginBottom: 4,
-  },
-  teachTag: {
-    backgroundColor: '#E8F5E8',
-  },
-  skillText: {
-    fontSize: 12,
-    color: '#333',
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  formatBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  formatText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-  },
-  locationText: {
-    fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-});
 
 export default HomeScreen;

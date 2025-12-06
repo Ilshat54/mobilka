@@ -5,12 +5,17 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  SafeAreaView,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSkill } from '../context/SkillContext';
+import { useTheme } from '../context/ThemeContext';
 
 const ChatsScreen = ({ navigation }) => {
   const { getMyChats, markAsRead } = useSkill();
+  const { colors } = useTheme();
   const chats = getMyChats();
 
   const formatTime = (timestamp) => {
@@ -45,13 +50,13 @@ const ChatsScreen = ({ navigation }) => {
 
   const renderChatItem = ({ item }) => (
     <TouchableOpacity 
-      style={styles.chatItem}
+      style={[styles.chatItem, { borderBottomColor: colors.border }]}
       onPress={() => handleChatPress(item)}
     >
       <View style={styles.avatarContainer}>
-        <Text style={styles.avatar}>{item.participantAvatar}</Text>
+        <Text style={[styles.avatar, { backgroundColor: colors.inputBackground }]}>{item.participantAvatar}</Text>
         {item.unreadCount > 0 && (
-          <View style={styles.unreadBadge}>
+          <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
             <Text style={styles.unreadCount}>
               {item.unreadCount > 99 ? '99+' : item.unreadCount}
             </Text>
@@ -61,10 +66,10 @@ const ChatsScreen = ({ navigation }) => {
 
       <View style={styles.chatContent}>
         <View style={styles.chatHeader}>
-          <Text style={styles.chatName} numberOfLines={1}>
+          <Text style={[styles.chatName, { color: colors.text }]} numberOfLines={1}>
             {item.participantName}
           </Text>
-          <Text style={styles.chatTime}>
+          <Text style={[styles.chatTime, { color: colors.textTertiary }]}>
             {formatTime(item.timestamp)}
           </Text>
         </View>
@@ -73,14 +78,15 @@ const ChatsScreen = ({ navigation }) => {
           <Text 
             style={[
               styles.lastMessage,
-              item.unreadCount > 0 && styles.unreadMessage
+              { color: colors.textSecondary },
+              item.unreadCount > 0 && [styles.unreadMessage, { color: colors.text, fontWeight: '500' }]
             ]} 
             numberOfLines={2}
           >
             {item.lastMessage}
           </Text>
           {item.unreadCount > 0 && (
-            <View style={styles.unreadDot} />
+            <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
           )}
         </View>
       </View>
@@ -88,12 +94,12 @@ const ChatsScreen = ({ navigation }) => {
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Заголовок */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Чаты</Text>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Чаты</Text>
         <TouchableOpacity style={styles.newChatButton}>
-          <Ionicons name="create-outline" size={24} color="#007AFF" />
+          <Ionicons name="create-outline" size={24} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -106,23 +112,23 @@ const ChatsScreen = ({ navigation }) => {
         contentContainerStyle={styles.chatsList}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="chatbubble-ellipses-outline" size={80} color="#e0e0e0" />
-            <Text style={styles.emptyStateTitle}>Нет чатов</Text>
-            <Text style={styles.emptyStateText}>
+            <Ionicons name="chatbubble-ellipses-outline" size={80} color={colors.textTertiary} />
+            <Text style={[styles.emptyStateTitle, { color: colors.textSecondary }]}>Нет чатов</Text>
+            <Text style={[styles.emptyStateText, { color: colors.textTertiary }]}>
               Начните общение, откликнувшись{'\n'}
               на одну из заявок
             </Text>
           </View>
         }
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   header: {
     flexDirection: 'row',
@@ -131,12 +137,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#000',
   },
   newChatButton: {
     padding: 4,
@@ -150,7 +154,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   avatarContainer: {
     position: 'relative',
@@ -161,7 +164,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#e9ecef',
     textAlign: 'center',
     lineHeight: 48,
   },
@@ -169,7 +171,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -2,
     right: -2,
-    backgroundColor: '#007AFF',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -196,12 +197,10 @@ const styles = StyleSheet.create({
   chatName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000',
     flex: 1,
   },
   chatTime: {
     fontSize: 13,
-    color: '#999',
     marginLeft: 8,
   },
   chatPreview: {
@@ -211,18 +210,14 @@ const styles = StyleSheet.create({
   lastMessage: {
     flex: 1,
     fontSize: 15,
-    color: '#666',
     lineHeight: 20,
   },
   unreadMessage: {
-    color: '#000',
-    fontWeight: '500',
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#007AFF',
     marginLeft: 8,
     marginTop: 6,
   },
@@ -235,13 +230,11 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#666',
     marginTop: 20,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
     textAlign: 'center',
     lineHeight: 22,
   },
