@@ -11,9 +11,13 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSkill } from '../context/SkillContext';
 import { useTheme } from '../context/ThemeContext';
+
+const blurhash =
+  '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj[';
 
 // Стили должны быть определены до использования в компонентах
 const styles = StyleSheet.create({
@@ -130,8 +134,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
     marginBottom: 4,
   },
-  teachTag: {
-  },
+  teachTag: {},
   skillText: {
     fontSize: 12,
   },
@@ -170,7 +173,7 @@ const styles = StyleSheet.create({
 // Отдельный компонент для карточки предложения
 const OfferCard = ({ item, index, colors, navigation }) => {
   const cardAnim = useRef(new Animated.Value(0)).current;
-  
+
   useEffect(() => {
     Animated.timing(cardAnim, {
       toValue: 1,
@@ -184,25 +187,35 @@ const OfferCard = ({ item, index, colors, navigation }) => {
     <Animated.View
       style={{
         opacity: cardAnim,
-        transform: [{
-          translateY: cardAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [20, 0],
-          }),
-        }],
+        transform: [
+          {
+            translateY: cardAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0],
+            }),
+          },
+        ],
       }}
     >
-      <TouchableOpacity 
-        style={[styles.card, { 
-          backgroundColor: colors.cardBackground,
-          shadowColor: colors.shadow,
-        }]}
+      <TouchableOpacity
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.cardBackground,
+            shadowColor: colors.shadow,
+          },
+        ]}
         onPress={() => navigation.navigate('OfferDetail', { offer: item })}
         activeOpacity={0.7}
       >
         <View style={styles.cardHeader}>
-          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-            <Text style={styles.avatarText}>{item.userAvatar}</Text>
+          <View style={[styles.avatar, { backgroundColor: colors.primary }]}> 
+            <Image 
+              source={{ uri: `https://api.dicebear.com/9.x/personas/png?seed=${item.userAvatarSeed || item.userAvatar || item.userName}` }} 
+              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.inputBackground }}
+              placeholder={{ blurhash }}
+              transition={1000}
+            /> 
           </View>
           <View style={styles.userInfo}>
             <Text style={[styles.userName, { color: colors.text }]}>{item.userName}</Text>
@@ -219,42 +232,69 @@ const OfferCard = ({ item, index, colors, navigation }) => {
           <View style={styles.skillSection}>
             <Text style={[styles.skillLabel, { color: colors.textTertiary }]}>Хочу научиться:</Text>
             <View style={styles.skillsList}>
-              {item.skillsToLearn.map((skill, skillIndex) => (
-                <View key={skillIndex} style={[styles.skillTag, { backgroundColor: colors.skillTagLearn }]}>
-                  <Text style={[styles.skillText, { color: colors.text }]}>🎯 {skill}</Text>
-                </View>
-              ))}
+              {(Array.isArray(item.skillsToLearn) && item.skillsToLearn.length > 0 ? item.skillsToLearn : []).map((skill, skillIndex) => {
+                const skillName = typeof skill === 'object' && skill !== null && skill.name 
+                  ? skill.name 
+                  : (typeof skill === 'string' && skill.trim() ? skill.trim() : String(skill || ''));
+                if (!skillName) return null;
+                return (
+                  <View key={skillIndex} style={[styles.skillTag, { backgroundColor: colors.skillTagLearn }]}>
+                    <Text style={[styles.skillText, { color: colors.text }]}>🎯 {skillName}</Text>
+                  </View>
+                );
+              })}
+              {(!item.skillsToLearn || !Array.isArray(item.skillsToLearn) || item.skillsToLearn.length === 0) && (
+                <Text style={[styles.skillText, { color: colors.textTertiary, fontStyle: 'italic' }]}>Не указано</Text>
+              )}
             </View>
           </View>
 
           <View style={styles.skillSection}>
             <Text style={[styles.skillLabel, { color: colors.textTertiary }]}>Могу научить:</Text>
             <View style={styles.skillsList}>
-              {item.skillsToTeach.map((skill, skillIndex) => (
-                <View key={skillIndex} style={[styles.skillTag, styles.teachTag, { backgroundColor: colors.skillTagTeach }]}>
-                  <Text style={[styles.skillText, { color: colors.text }]}>💡 {skill}</Text>
-                </View>
-              ))}
+              {(Array.isArray(item.skillsToTeach) && item.skillsToTeach.length > 0 ? item.skillsToTeach : []).map((skill, skillIndex) => {
+                const skillName = typeof skill === 'object' && skill !== null && skill.name 
+                  ? skill.name 
+                  : (typeof skill === 'string' && skill.trim() ? skill.trim() : String(skill || ''));
+                if (!skillName) return null;
+                return (
+                  <View
+                    key={skillIndex}
+                    style={[styles.skillTag, styles.teachTag, { backgroundColor: colors.skillTagTeach }]}
+                  >
+                    <Text style={[styles.skillText, { color: colors.text }]}>💡 {skillName}</Text>
+                  </View>
+                );
+              })}
+              {(!item.skillsToTeach || !Array.isArray(item.skillsToTeach) || item.skillsToTeach.length === 0) && (
+                <Text style={[styles.skillText, { color: colors.textTertiary, fontStyle: 'italic' }]}>Не указано</Text>
+              )}
             </View>
           </View>
         </View>
 
         <View style={styles.cardFooter}>
           <View style={[styles.formatBadge, { backgroundColor: colors.inputBackground }]}>
-            <Ionicons 
-              name={item.learningFormat === 'online' ? 'wifi' : 
-                    item.learningFormat === 'offline' ? 'location' : 'phone-portrait'} 
-              size={14} 
-              color={colors.textSecondary} 
+            <Ionicons
+              name={
+                item.learningFormat === 'online'
+                  ? 'wifi'
+                  : item.learningFormat === 'offline'
+                    ? 'location'
+                    : 'phone-portrait'
+              }
+              size={14}
+              color={colors.textSecondary}
             />
             <Text style={[styles.formatText, { color: colors.textSecondary }]}>
-              {item.learningFormat === 'online' ? 'Онлайн' : 
-               item.learningFormat === 'offline' ? 'Оффлайн' : 'Оба формата'}
+              {item.learningFormat === 'online'
+                ? 'Онлайн'
+                : item.learningFormat === 'offline'
+                  ? 'Оффлайн'
+                  : 'Оба формата'}
             </Text>
           </View>
-          {item.location && (
-            <Text style={[styles.locationText, { color: colors.textSecondary }]}>{item.location}</Text>
-          )}
+          {item.location && <Text style={[styles.locationText, { color: colors.textSecondary }]}>{item.location}</Text>}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -266,7 +306,7 @@ const HomeScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredOffers, setFilteredOffers] = useState(offers || []);
-  
+
   // Анимации
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -291,14 +331,11 @@ const HomeScreen = ({ navigation }) => {
     if (searchQuery === '') {
       setFilteredOffers(offers || []);
     } else {
-      const filtered = (offers || []).filter(offer =>
-        offer.skillsToLearn?.some(skill => 
-          skill.toLowerCase().includes(searchQuery.toLowerCase())
-        ) ||
-        offer.skillsToTeach?.some(skill => 
-          skill.toLowerCase().includes(searchQuery.toLowerCase())
-        ) ||
-        offer.title?.toLowerCase().includes(searchQuery.toLowerCase())
+      const filtered = (offers || []).filter(
+        (offer) =>
+          offer.skillsToLearn?.some((skill) => skill.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          offer.skillsToTeach?.some((skill) => skill.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          offer.title?.toLowerCase().includes(searchQuery.toLowerCase()),
       );
       setFilteredOffers(filtered);
     }
@@ -309,14 +346,11 @@ const HomeScreen = ({ navigation }) => {
     if (query === '') {
       setFilteredOffers(offers);
     } else {
-      const filtered = offers.filter(offer =>
-        offer.skillsToLearn.some(skill => 
-          skill.toLowerCase().includes(query.toLowerCase())
-        ) ||
-        offer.skillsToTeach.some(skill => 
-          skill.toLowerCase().includes(query.toLowerCase())
-        ) ||
-        offer.title.toLowerCase().includes(query.toLowerCase())
+      const filtered = offers.filter(
+        (offer) =>
+          offer.skillsToLearn.some((skill) => skill.toLowerCase().includes(query.toLowerCase())) ||
+          offer.skillsToTeach.some((skill) => skill.toLowerCase().includes(query.toLowerCase())) ||
+          offer.title.toLowerCase().includes(query.toLowerCase()),
       );
       setFilteredOffers(filtered);
     }
@@ -347,7 +381,7 @@ const HomeScreen = ({ navigation }) => {
             {
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
-            }
+            },
           ]}
         >
           <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
@@ -374,15 +408,15 @@ const HomeScreen = ({ navigation }) => {
             contentContainerStyle={styles.listContent}
             ListHeaderComponent={
               <View style={styles.header}>
-                <Text style={[styles.offersCount, { color: colors.textSecondary }]}>{filteredOffers.length} предложений</Text>
+                <Text style={[styles.offersCount, { color: colors.textSecondary }]}>
+                  {filteredOffers.length} предложений
+                </Text>
               </View>
             }
           />
         ) : (
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              Нет доступных предложений
-            </Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Нет доступных предложений</Text>
           </View>
         )}
       </View>

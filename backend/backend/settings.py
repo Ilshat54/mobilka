@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 from datetime import timedelta
 from pathlib import Path
+from authenticate.middleware import DisableCSRFMiddleware
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,14 +26,12 @@ SECRET_KEY = 'django-insecure-vq=oqwqwb*8jofal4=cdkrbakammcp%c$b_q=uc01=%0ms4ao=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',
     'rest_framework',
     'drf_yasg',
     "corsheaders",
@@ -43,18 +42,25 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+      'daphne',
+      'django_eventstream',
     'django.contrib.staticfiles',
+   
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    'authenticate.middleware.DisableCSRFMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_grip.GripMiddleware'
 ]
+
+GRIP_URL = ''
 
 ROOT_URLCONF = 'backend.urls'
 
@@ -74,7 +80,9 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'backend.wsgi.application'
+# WSGI_APPLICATION = 'backend.wsgi.application'
+
+ASGI_APPLICATION = 'backend.asgi.application'
 
 
 # Database
@@ -123,43 +131,64 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-SIMPLE_JWT = {
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
-    "UPDATE_LAST_LOGIN": False,
-    "ALGORITHM": "HS256",
-    "SIGNING_KEY": SECRET_KEY,
-    "VERIFYING_KEY": True,
-    "AUDIENCE": None,
-    "ISSUER": None,
-    "JWK_URL": None,
-    "LEEWAY": 0,
-    "AUTH_HEADER_TYPES": ("Bearer",),
-    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
-    "USER_ID_FIELD": "id",
-    "USER_ID_CLAIM": "user_id",
-    "USER_AUTHENTICATION_RULE": "rest_framework_simplejwt.authentication.default_user_authentication_rule",
-    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
-    "TOKEN_TYPE_CLAIM": "token_type",
-    "TOKEN_USER_CLASS": "rest_framework_simplejwt.models.TokenUser",
-    "JTI_CLAIM": "jti",
-    "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
-    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=1),
-    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=30),
-    'AUTH_COOKIE': 'access_token',  # Cookie name. Enables cookies if value is set.
-    'AUTH_COOKIE_DOMAIN': None,  # A string like "example.com", or None for standard domain cookie.
-    'AUTH_COOKIE_SECURE': True,  # Whether the auth cookies should be secure (https:// only).
-    'AUTH_COOKIE_HTTP_ONLY': True,  # Http only cookie flag.It's not fetch by javascript.
-    'AUTH_COOKIE_PATH': '/',  # The path of the auth cookie.
-    'AUTH_COOKIE_SAMESITE': None,  # Whether to set the flag restricting cookie leaks on cross-site requests.
-    'REFRESH_TOKEN_COOKIE_NAME': 'refresh_token'
+# Custom User Model
+AUTH_USER_MODEL = 'authenticate.CustomUser'
 
-}
 AUTHENTICATION_BACKENDS = (
-        'django.contrib.auth.backends.ModelBackend',
-    )
+    'django.contrib.auth.backends.ModelBackend',
+)
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+}
+
+# CORS Settings
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:19006",
+    "http://127.0.0.1:19006",
+    "exp://localhost:19000",
+    "http://localhost:8081",  # Metro bundler
+    
+]
+
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = True
+
+
+EVENTSTREAM_ALLOW_ORIGINS = ["http://localhost:3000",
+    "http://localhost:19006",
+    "http://127.0.0.1:19006",
+    "exp://localhost:19000",
+    "http://localhost:8081"]
+EVENTSTREAM_ALLOW_CREDENTIALS = True
+
+# Дополнительные настройки CORS для мобильных устройств
+if DEBUG:
+    CORS_ALLOW_HEADERS = [
+        'accept',
+        'accept-encoding',
+        'authorization',
+        'content-type',
+        'dnt',
+        'origin',
+        'user-agent',
+        'x-csrftoken',
+        'x-requested-with',
+        "cache-control",
+        "last-event-id"
+    ]

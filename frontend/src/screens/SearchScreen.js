@@ -1,15 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  FlatList,
-  TouchableOpacity,
-  Keyboard,
-} from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Keyboard } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSkill } from '../context/SkillContext';
+
+const blurhash =
+  '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj[';
 
 const SearchScreen = ({ navigation }) => {
   const { searchOffers, createChat, user } = useSkill();
@@ -26,32 +22,35 @@ const SearchScreen = ({ navigation }) => {
     setIsSearching(text.length > 0);
   };
 
-  const handleContact = (offer) => {
-    const chatId = createChat(
-      offer.userId, 
-      offer.userName, 
-      offer.userAvatar
-    );
-    navigation.navigate('Chat', { chatId, participantName: offer.userName });
+  const handleContact = async (offer) => {
+    try {
+      const chatId = await createChat(offer.userId, offer.userName, offer.userAvatar);
+      if (chatId) {
+        navigation.navigate('Chat', { 
+          chatId: String(chatId), 
+          participantName: String(offer.userName || 'Пользователь'),
+          participantAvatarSeed: offer.userAvatarSeed || offer.userAvatar || offer.userName || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error creating chat:', error);
+    }
   };
 
   const renderOfferItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.offerCard}
-      onPress={() => navigation.navigate('OfferDetail', { offer: item })}
-    >
+    <TouchableOpacity style={styles.offerCard} onPress={() => navigation.navigate('OfferDetail', { offer: item })}>
       <View style={styles.offerHeader}>
-        <Text style={styles.offerAvatar}>{item.userAvatar}</Text>
+        <Image
+          source={{ uri: `https://api.dicebear.com/9.x/personas/png?seed=${item.userAvatarSeed || item.userAvatar || item.userName}` }}
+          style={styles.offerAvatar}
+          placeholder={{ blurhash }}
+          transition={1000}
+        />
         <View style={styles.offerUserInfo}>
           <Text style={styles.offerUserName}>{item.userName}</Text>
-          <Text style={styles.offerDate}>
-            {new Date(item.createdAt).toLocaleDateString('ru-RU')}
-          </Text>
+          <Text style={styles.offerDate}>{new Date(item.createdAt).toLocaleDateString('ru-RU')}</Text>
         </View>
-        <TouchableOpacity 
-          style={styles.contactButton}
-          onPress={() => handleContact(item)}
-        >
+        <TouchableOpacity style={styles.contactButton} onPress={() => handleContact(item)}>
           <Ionicons name="chatbubble-ellipses" size={20} color="#007AFF" />
         </TouchableOpacity>
       </View>
@@ -65,18 +64,18 @@ const SearchScreen = ({ navigation }) => {
         <View style={styles.skillsColumn}>
           <Text style={styles.skillsLabel}>Ищу:</Text>
           <View style={styles.skillsList}>
-            {item.skillsToLearn.slice(0, 3).map((skill, index) => (
+            {item.skillsToLearn.slice(0, 3)?.map((skill, index) => (
               <View key={index} style={styles.skillTag}>
                 <Text style={styles.skillText}>🎯 {skill}</Text>
               </View>
             ))}
           </View>
         </View>
-        
+
         <View style={styles.skillsColumn}>
           <Text style={styles.skillsLabel}>Предлагаю:</Text>
           <View style={styles.skillsList}>
-            {item.skillsToTeach.slice(0, 3).map((skill, index) => (
+            {item.skillsToTeach.slice(0, 3)?.map((skill, index) => (
               <View key={index} style={styles.skillTag}>
                 <Text style={styles.skillText}>💡 {skill}</Text>
               </View>
@@ -87,20 +86,26 @@ const SearchScreen = ({ navigation }) => {
 
       <View style={styles.offerFooter}>
         <View style={styles.formatTag}>
-          <Ionicons 
-            name={item.learningFormat === 'online' ? 'laptop' : 
-                  item.learningFormat === 'offline' ? 'location' : 'phone-portrait'} 
-            size={12} 
-            color="#666" 
+          <Ionicons
+            name={
+              item.learningFormat === 'online'
+                ? 'laptop'
+                : item.learningFormat === 'offline'
+                  ? 'location'
+                  : 'phone-portrait'
+            }
+            size={12}
+            color="#666"
           />
           <Text style={styles.formatText}>
-            {item.learningFormat === 'online' ? 'Онлайн' : 
-             item.learningFormat === 'offline' ? 'Оффлайн' : 'Оба формата'}
+            {item.learningFormat === 'online'
+              ? 'Онлайн'
+              : item.learningFormat === 'offline'
+                ? 'Оффлайн'
+                : 'Оба формата'}
           </Text>
         </View>
-        {item.location && (
-          <Text style={styles.locationText}>{item.location}</Text>
-        )}
+        {item.location && <Text style={styles.locationText}>{item.location}</Text>}
       </View>
     </TouchableOpacity>
   );
@@ -119,7 +124,7 @@ const SearchScreen = ({ navigation }) => {
           clearButtonMode="while-editing"
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.clearButton}
             onPress={() => {
               setSearchQuery('');
@@ -136,16 +141,14 @@ const SearchScreen = ({ navigation }) => {
         <FlatList
           data={searchResults}
           renderItem={renderOfferItem}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.resultsContainer}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="search-outline" size={64} color="#ccc" />
               <Text style={styles.emptyStateTitle}>Ничего не найдено</Text>
-              <Text style={styles.emptyStateText}>
-                Попробуйте изменить запрос
-              </Text>
+              <Text style={styles.emptyStateText}>Попробуйте изменить запрос</Text>
             </View>
           }
         />
@@ -153,9 +156,7 @@ const SearchScreen = ({ navigation }) => {
         <View style={styles.initialState}>
           <Ionicons name="search-outline" size={80} color="#e0e0e0" />
           <Text style={styles.initialStateTitle}>Найдите подходящие заявки по навыкам</Text>
-          <Text style={styles.initialStateText}>
-            Поиск понимает русский и английский
-          </Text>
+          <Text style={styles.initialStateText}>Поиск понимает русский и английский</Text>
         </View>
       )}
     </View>
@@ -205,7 +206,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   offerAvatar: {
-    fontSize: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     marginRight: 12,
   },
   offerUserInfo: {

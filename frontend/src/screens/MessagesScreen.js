@@ -1,17 +1,12 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  SafeAreaView,
-  Platform,
-  StatusBar,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useSkill } from '../context/SkillContext';
 import { useTheme } from '../context/ThemeContext';
+
+const blurhash =
+  '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj[';
 
 const ChatsScreen = ({ navigation }) => {
   const { getMyChats, markAsRead } = useSkill();
@@ -22,44 +17,52 @@ const ChatsScreen = ({ navigation }) => {
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
-    
-    if (diff < 86400000) { // Меньше суток
-      return date.toLocaleTimeString('ru-RU', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
+
+    if (diff < 86400000) {
+      // Меньше суток
+      return date.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit',
       });
-    } else if (diff < 604800000) { // Меньше недели
-      return date.toLocaleDateString('ru-RU', { 
-        weekday: 'short' 
+    } else if (diff < 604800000) {
+      // Меньше недели
+      return date.toLocaleDateString('ru-RU', {
+        weekday: 'short',
       });
     } else {
-      return date.toLocaleDateString('ru-RU', { 
-        day: 'numeric', 
-        month: 'short' 
+      return date.toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'short',
       });
     }
   };
 
   const handleChatPress = (chat) => {
     markAsRead(chat.id);
-    navigation.navigate('Chat', { 
-      chatId: chat.id, 
-      participantName: chat.participantName 
+    navigation.navigate('Chat', {
+      chatId: chat.id,
+      participantName: chat.participantName,
+      participantAvatarSeed: chat.participantAvatarSeed,
     });
   };
 
   const renderChatItem = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[styles.chatItem, { borderBottomColor: colors.border }]}
       onPress={() => handleChatPress(item)}
     >
       <View style={styles.avatarContainer}>
-        <Text style={[styles.avatar, { backgroundColor: colors.inputBackground }]}>{item.participantAvatar}</Text>
+        <Image
+          source={`https://api.dicebear.com/9.x/personas/png?seed=${item.participantAvatarSeed}`}
+          style={[styles.avatar, { backgroundColor: colors.inputBackground }]}
+          contentFit="cover"
+          placeholder={{ blurhash }}
+          transition={1000}
+        />
+
         {item.unreadCount > 0 && (
           <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
-            <Text style={styles.unreadCount}>
-              {item.unreadCount > 99 ? '99+' : item.unreadCount}
-            </Text>
+            <Text style={styles.unreadCount}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</Text>
           </View>
         )}
       </View>
@@ -69,25 +72,21 @@ const ChatsScreen = ({ navigation }) => {
           <Text style={[styles.chatName, { color: colors.text }]} numberOfLines={1}>
             {item.participantName}
           </Text>
-          <Text style={[styles.chatTime, { color: colors.textTertiary }]}>
-            {formatTime(item.timestamp)}
-          </Text>
+          <Text style={[styles.chatTime, { color: colors.textTertiary }]}>{formatTime(item.timestamp)}</Text>
         </View>
-        
+
         <View style={styles.chatPreview}>
-          <Text 
+          <Text
             style={[
               styles.lastMessage,
               { color: colors.textSecondary },
-              item.unreadCount > 0 && [styles.unreadMessage, { color: colors.text, fontWeight: '500' }]
-            ]} 
+              item.unreadCount > 0 && [styles.unreadMessage, { color: colors.text, fontWeight: '500' }],
+            ]}
             numberOfLines={2}
           >
             {item.lastMessage}
           </Text>
-          {item.unreadCount > 0 && (
-            <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
-          )}
+          {item.unreadCount > 0 && <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />}
         </View>
       </View>
     </TouchableOpacity>
@@ -98,16 +97,13 @@ const ChatsScreen = ({ navigation }) => {
       {/* Заголовок */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Чаты</Text>
-        <TouchableOpacity style={styles.newChatButton}>
-          <Ionicons name="create-outline" size={24} color={colors.primary} />
-        </TouchableOpacity>
       </View>
 
       {/* Список чатов */}
       <FlatList
         data={chats}
         renderItem={renderChatItem}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.chatsList}
         ListEmptyComponent={
@@ -212,8 +208,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
   },
-  unreadMessage: {
-  },
+  unreadMessage: {},
   unreadDot: {
     width: 8,
     height: 8,

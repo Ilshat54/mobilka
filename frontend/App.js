@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -6,11 +6,13 @@ import { createStackNavigator, TransitionPresets } from '@react-navigation/stack
 import { Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Импорты экранов
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
-import { SkillProvider } from './src/context/SkillContext';
+import AuthScreen from './src/screens/AuthScreen';
+import { SkillProvider, useSkill } from './src/context/SkillContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import MessagesScreen from './src/screens/MessagesScreen';
 import OfferDetailScreen from './src/screens/OfferDetailScreen';
@@ -22,6 +24,39 @@ const Stack = createStackNavigator();
 // Главный стек навигации
 function AppContent() {
   const { isDark, colors } = useTheme();
+  const { isAuthenticated, setCurrentUser } = useSkill();
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const user = await AsyncStorage.getItem('user');
+      const username = await AsyncStorage.getItem('username');
+      const password = await AsyncStorage.getItem('password');
+      if (user && username && password) {
+        setCurrentUser(JSON.parse(user));
+      }
+    } catch (error) {
+      console.error('Error checking auth:', error);
+    } finally {
+      setCheckingAuth(false);
+    }
+  };
+
+  const handleAuthSuccess = (userData) => {
+    setCurrentUser(userData);
+  };
+
+  if (checkingAuth) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <Text style={{ color: colors.text }}>Загрузка...</Text>
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer
@@ -67,95 +102,99 @@ function AppContent() {
           },
         }}
       >
-        {/* Основной экран с табами */}
-        <Stack.Screen 
-          name="MainTabs" 
-          component={MainTabs}
-          options={{ headerShown: false }}
-        />
-        {/* Экран деталей заявки поверх всего */}
-        <Stack.Screen 
-          name="OfferDetail" 
-          component={OfferDetailScreen}
-          options={{ 
-            title: 'Детали заявки',
-            headerBackTitle: 'Назад',
-            gestureEnabled: true,
-            cardStyleInterpolator: ({ current, layouts }) => ({
-              cardStyle: {
-                transform: [
-                  {
-                    translateX: current.progress.interpolate({
+        {isAuthenticated ? (
+          <>
+            {/* Основной экран с табами */}
+            <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+            {/* Экран деталей заявки поверх всего */}
+            <Stack.Screen
+              name="OfferDetail"
+              component={OfferDetailScreen}
+              options={{
+                title: 'Детали заявки',
+                headerBackTitle: 'Назад',
+                gestureEnabled: true,
+                cardStyleInterpolator: ({ current, layouts }) => ({
+                  cardStyle: {
+                    transform: [
+                      {
+                        translateX: current.progress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [layouts.screen.width, 0],
+                        }),
+                      },
+                    ],
+                  },
+                  overlayStyle: {
+                    opacity: current.progress.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [layouts.screen.width, 0],
+                      outputRange: [0, 0.5],
                     }),
                   },
-                ],
-              },
-              overlayStyle: {
-                opacity: current.progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 0.5],
                 }),
-              },
-            }),
-            transitionSpec: {
-              open: {
-                animation: 'timing',
-                config: {
-                  duration: 300,
+                transitionSpec: {
+                  open: {
+                    animation: 'timing',
+                    config: {
+                      duration: 300,
+                    },
+                  },
+                  close: {
+                    animation: 'timing',
+                    config: {
+                      duration: 300,
+                    },
+                  },
                 },
-              },
-              close: {
-                animation: 'timing',
-                config: {
-                  duration: 300,
-                },
-              },
-            },
-          }}
-        />
-        {/* Экран чата */}
-        <Stack.Screen 
-          name="Chat" 
-          component={ChatScreen}
-          options={{ 
-            headerShown: false,
-            gestureEnabled: true,
-            cardStyleInterpolator: ({ current, layouts }) => ({
-              cardStyle: {
-                transform: [
-                  {
-                    translateX: current.progress.interpolate({
+              }}
+            />
+            {/* Экран чата */}
+            <Stack.Screen
+              name="Chat"
+              component={ChatScreen}
+              options={{
+                headerShown: false,
+                gestureEnabled: true,
+                cardStyleInterpolator: ({ current, layouts }) => ({
+                  cardStyle: {
+                    transform: [
+                      {
+                        translateX: current.progress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [layouts.screen.width, 0],
+                        }),
+                      },
+                    ],
+                  },
+                  overlayStyle: {
+                    opacity: current.progress.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [layouts.screen.width, 0],
+                      outputRange: [0, 0.5],
                     }),
                   },
-                ],
-              },
-              overlayStyle: {
-                opacity: current.progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 0.5],
                 }),
-              },
-            }),
-            transitionSpec: {
-              open: {
-                animation: 'timing',
-                config: {
-                  duration: 300,
+                transitionSpec: {
+                  open: {
+                    animation: 'timing',
+                    config: {
+                      duration: 300,
+                    },
+                  },
+                  close: {
+                    animation: 'timing',
+                    config: {
+                      duration: 300,
+                    },
+                  },
                 },
-              },
-              close: {
-                animation: 'timing',
-                config: {
-                  duration: 300,
-                },
-              },
-            },
-          }}
-        />
+              }}
+            />
+          </>
+        ) : (
+          <Stack.Screen name="Auth" options={{ headerShown: false }}>
+            {(props) => <AuthScreen {...props} onAuthSuccess={handleAuthSuccess} />}
+          </Stack.Screen>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -191,7 +230,7 @@ class ErrorBoundary extends React.Component {
 }
 
 // Главный стек навигации
-export default function App() {
+function AppWithProviders() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
@@ -203,10 +242,12 @@ export default function App() {
   );
 }
 
+export default AppWithProviders;
+
 // Компонент с нижними табами
 function MainTabs() {
   const { colors } = useTheme();
-  
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({

@@ -1,337 +1,588 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { offersAPI, chatsAPI, messagesAPI, authAPI, skillsAPI } from '../services/api';
 
 const SkillContext = createContext();
 
 export const SkillProvider = ({ children }) => {
-  const [offers, setOffers] = useState([
-    {
-      id: '1',
-      userId: '2',
-      userName: 'Анна К.',
-      userAvatar: 'AV',
-      title: 'Обменяю дизайн на программирование',
-      description: 'Ищу партнера для взаимного обучения. Могу научить Figma и UI/UX дизайну, хочу научиться основам JavaScript.',
-      skillsToLearn: ['JavaScript', 'React'],
-      skillsToTeach: ['Figma', 'UI/UX Design'],
-      learningFormat: 'online',
-      createdAt: new Date(),
-    },
-    {
-      id: '2',
-      userId: '3',
-      userName: 'Максим П.',
-      userAvatar: 'MP', 
-      title: 'Научу программировать, хочу выучить английский',
-      description: 'Профессиональный разработчик с опытом 5 лет. Могу помочь с Python и веб-разработкой, сам хочу подтянуть английский для работы.',
-      skillsToLearn: ['Английский язык', 'Разговорная практика'],
-      skillsToTeach: ['Python', 'Web Development', 'Django'],
-      learningFormat: 'both',
-      location: 'Москва',
-      createdAt: new Date(Date.now() - 86400000),
-    },
-    {
-      id: '3',
-      userId: '4', 
-      userName: 'Елена С.',
-      userAvatar: 'ES',
-      title: 'Ищу ментора по Java',
-      description: 'Начинающий разработчик, хочу найти ментора по Java для регулярных консультаций.',
-      skillsToLearn: ['Java', 'Spring Framework'],
-      skillsToTeach: ['Графический дизайн', 'Photoshop'],
-      learningFormat: 'online',
-      createdAt: new Date(Date.now() - 172800000),
-    },
-  ]);
+  const [offers, setOffers] = useState([]);
+  const [chats, setChats] = useState([]);
+  const [user, setUser] = useState(null);
+  const [skills, setSkills] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const [chats, setChats] = useState([
-    {
-      id: '1',
-      participantId: '2',
-      participantName: 'Анна К.',
-      participantAvatar: '👩‍💼',
-      lastMessage: 'Привет! Готова помочь с дизайном',
-      timestamp: new Date(Date.now() - 3600000),
-      unreadCount: 2,
-      messages: [
-        {
-          id: '1',
-          text: 'Привет! Вижу твою заявку по обмену навыками',
-          senderId: '2',
-          timestamp: new Date(Date.now() - 7200000),
-        },
-        {
-          id: '2', 
-          text: 'Готова помочь с дизайном в обмен на программирование',
-          senderId: '2',
-          timestamp: new Date(Date.now() - 3600000),
-        },
-      ],
-    },
-    {
-      id: '2',
-      participantId: '3',
-      participantName: 'Максим П.',
-      participantAvatar: '👨‍💻',
-      lastMessage: 'Можем обсудить детали завтра',
-      timestamp: new Date(Date.now() - 86400000),
-      unreadCount: 0,
-      messages: [
-        {
-          id: '1',
-          text: 'Здравствуйте! Заинтересовал ваш опыт в Python',
-          senderId: '1',
-          timestamp: new Date(Date.now() - 172800000),
-        },
-        {
-          id: '2',
-          text: 'Можем обсудить детали завтра',
-          senderId: '3', 
-          timestamp: new Date(Date.now() - 86400000),
-        },
-      ],
-    },
-  ]);
+  // Загрузить пользователя из хранилища при старте
+  useEffect(() => {
+    loadUser();
+    // Загружаем навыки с задержкой, чтобы не блокировать старт приложения
+    // и только если backend доступенr
+    const timer = setTimeout(() => {
+      loadSkills();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const [users, setUsers] = useState([
-    {
-      id: '1',
-      name: 'Иван Петров',
-      email: 'ivan@example.com',
-      avatar: '👤',
-      skills: ['React Native', 'TypeScript', 'Дизайн'],
-      createdAt: new Date().toISOString(),
+  // Загрузить пользователя
+  const loadUser = async () => {
+    try {
+      const userData = await AsyncStorage.getItem('user');
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+        setIsAuthenticated(true);
+        // Загружаем свежий профиль с сервера, чтобы получить актуальные данные
+        try {
+          const profileResponse = await authAPI.getProfile();
+          if (profileResponse && profileResponse.success && profileResponse.user) {
+            setUser(profileResponse.user);
+            await AsyncStorage.setItem('user', JSON.stringify(profileResponse.user));
+          }
+        } catch (profileError) {
+          console.warn('Failed to load fresh profile, using cached user data:', profileError);
+        }
+        // Загружаем данные после авторизации
+        loadOffers();
+        loadChats();
+      }
+    } catch (error) {
+      console.error('Error loading user:', error);
     }
-  ]);
+  };
 
-  const [currentUser, setCurrentUser] = useState({
-    id: '1',
-    name: 'Иван Петров',
-    email: 'ivan@example.com',
-    avatar: '👤',
-    skills: ['React Native', 'TypeScript', 'Дизайн'],
-    createdAt: new Date().toISOString(),
-  });
+  // Загрузить навыки
+  const loadSkills = async () => {
+    try {
+      const response = await skillsAPI.getAll();
+      
+      // Обрабатываем разные форматы ответа
+      let skillsList = [];
+      if (response) {
+        if (Array.isArray(response)) {
+          skillsList = response;
+        } else if (response.results && Array.isArray(response.results)) {
+          skillsList = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          skillsList = response.data;
+        }
+      }
+      
+      setSkills(skillsList);
+    } catch (error) {
+      // Тихая ошибка - навыки не критичны для работы приложения
+      console.warn('Skills API недоступен. Приложение будет работать без предзагруженных навыков.');
+      setSkills([]);
+    }
+  };
 
-  // Умный поиск с угадыванием
+  // Загрузить заявки
+  const loadOffers = async (params = {}) => {
+    try {
+      setLoading(true);
+      const response = await offersAPI.getAll(params);
+
+      // DRF может возвращать данные в формате pagination или просто массив
+      let offersList = [];
+      if (response) {
+        if (Array.isArray(response)) {
+          offersList = response;
+        } else if (response.results && Array.isArray(response.results)) {
+          // Формат pagination
+          offersList = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          offersList = response.data;
+        }
+      }
+
+      if (__DEV__) {
+        console.log('📋 Loaded offers:', offersList.length, 'offers');
+      }
+
+      if (offersList.length > 0) {
+        // Преобразуем данные в формат, который ожидает фронтенд
+        const formattedOffers = offersList?.map((offer) => {
+          // Обработка навыков для изучения
+          let skillsToLearnArray = [];
+          if (Array.isArray(offer.skills_to_learn) && offer.skills_to_learn.length > 0) {
+            skillsToLearnArray = offer.skills_to_learn.map((s) => {
+              if (typeof s === 'object' && s !== null) {
+                return s.name || s.title || (s.id ? String(s.id) : String(s));
+              }
+              return typeof s === 'string' ? s : String(s);
+            });
+          } else if (offer.skillsToLearn && Array.isArray(offer.skillsToLearn)) {
+            skillsToLearnArray = offer.skillsToLearn;
+          }
+
+          // Обработка навыков для обучения
+          let skillsToTeachArray = [];
+          if (Array.isArray(offer.skills_to_teach) && offer.skills_to_teach.length > 0) {
+            skillsToTeachArray = offer.skills_to_teach.map((s) => {
+              if (typeof s === 'object' && s !== null) {
+                return s.name || s.title || (s.id ? String(s.id) : String(s));
+              }
+              return typeof s === 'string' ? s : String(s);
+            });
+          } else if (offer.skillsToTeach && Array.isArray(offer.skillsToTeach)) {
+            skillsToTeachArray = offer.skillsToTeach;
+          }
+
+          if (__DEV__) {
+            console.log(`📋 Offer ${offer.id}: skills_to_learn=`, offer.skills_to_learn, '->', skillsToLearnArray);
+            console.log(`📋 Offer ${offer.id}: skills_to_teach=`, offer.skills_to_teach, '->', skillsToTeachArray);
+          }
+
+          return {
+            id: offer.id?.toString() || String(offer.id),
+            userId: offer.user?.id?.toString() || String(offer.user?.id || ''),
+            userName: offer.user?.name || offer.user?.username || offer.user?.full_name || 'Пользователь',
+            userAvatar: offer.user?.avatar_seed || offer.user?.username || 'U',
+            title: offer.title || '',
+            description: offer.description || '',
+            skillsToLearn: skillsToLearnArray,
+            skillsToTeach: skillsToTeachArray,
+            learningFormat: offer.learning_format || offer.learningFormat || 'online',
+            location: offer.location || '',
+            createdAt: offer.created_at || offer.createdAt || new Date().toISOString(),
+          };
+        });
+        setOffers(formattedOffers);
+      } else {
+        // Если список пустой, устанавливаем пустой массив
+        setOffers([]);
+      }
+    } catch (error) {
+      console.error('Error loading offers:', error);
+      // При ошибке устанавливаем пустой массив, чтобы не было undefined
+      setOffers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Загрузить чаты
+  const loadChats = async () => {
+    try {
+      const response = await chatsAPI.getAll();
+
+      // Обработка формата pagination или массива
+      let chatsList = [];
+      if (response) {
+        if (Array.isArray(response)) {
+          chatsList = response;
+        } else if (response.results && Array.isArray(response.results)) {
+          chatsList = response.results;
+        } else if (response.data && Array.isArray(response.data)) {
+          chatsList = response.data;
+        }
+      }
+
+      if (chatsList.length > 0) {
+        // Преобразуем данные
+        const formattedChats = chatsList?.map((chat) => ({
+          id: chat.id?.toString() || String(chat.id),
+          participantId: chat.other_participant?.id?.toString() || '',
+          participantName: chat.other_participant?.name || chat.other_participant?.username || 'Пользователь',
+          participantAvatarSeed: chat.other_participant?.avatar_seed || chat.other_participant?.username || '',
+          participantAvatar: chat.other_participant?.avatar_seed || chat.other_participant?.username || 'U',
+          lastMessage: chat.last_message?.text || '',
+          timestamp: chat.last_message?.created_at || chat.updated_at,
+          unreadCount: chat.unread_count || 0,
+          messages: [], // Загрузим отдельно при открытии чата
+        }));
+        setChats(formattedChats);
+      } else {
+        setChats([]);
+      }
+    } catch (error) {
+      console.error('Error loading chats:', error);
+      setChats([]);
+    }
+  };
+
+  // Добавить заявку
+  const addOffer = async (offerData) => {
+    try {
+      setLoading(true);
+
+      if (__DEV__) {
+        console.log('➕ Creating offer:', offerData.title);
+      }
+
+      // Преобразуем навыки в ID если они есть в списке, иначе отправляем названия
+      const skillsToLearnArray = Array.isArray(offerData.skillsToLearn) 
+        ? offerData.skillsToLearn 
+        : (offerData.skillsToLearn || '').split(',').map(s => s.trim()).filter(s => s);
+      
+      const skillsToTeachArray = Array.isArray(offerData.skillsToTeach) 
+        ? offerData.skillsToTeach 
+        : (offerData.skillsToTeach || '').split(',').map(s => s.trim()).filter(s => s);
+
+      const skillsToLearnIds = skillsToLearnArray
+        ?.map((skillName) => {
+          const skill = skills.find((s) => {
+            const skillNameLower = (skillName || '').toLowerCase().trim();
+            const sNameLower = (s.name || '').toLowerCase().trim();
+            return sNameLower === skillNameLower;
+          });
+          return skill ? skill.id : null;
+        })
+        .filter((id) => id !== null);
+
+      const skillsToTeachIds = skillsToTeachArray
+        ?.map((skillName) => {
+          const skill = skills.find((s) => {
+            const skillNameLower = (skillName || '').toLowerCase().trim();
+            const sNameLower = (s.name || '').toLowerCase().trim();
+            return sNameLower === skillNameLower;
+          });
+          return skill ? skill.id : null;
+        })
+        .filter((id) => id !== null);
+
+      if (__DEV__) {
+        console.log('📝 Skills to learn:', skillsToLearnArray);
+        console.log('📝 Skills to teach:', skillsToTeachArray);
+        console.log('📝 Skills to learn IDs:', skillsToLearnIds);
+        console.log('📝 Skills to teach IDs:', skillsToTeachIds);
+      }
+
+      const requestData = {
+        title: offerData.title,
+        description: offerData.description,
+        learning_format: offerData.learningFormat,
+        location: offerData.location || '',
+      };
+
+      // Если есть ID навыков, отправляем их, иначе отправляем названия для автосоздания
+      if (skillsToLearnIds.length > 0) {
+        requestData.skills_to_learn_ids = skillsToLearnIds;
+      } else if (skillsToLearnArray.length > 0) {
+        requestData.skill_names_to_learn = skillsToLearnArray;
+      }
+
+      if (skillsToTeachIds.length > 0) {
+        requestData.skills_to_teach_ids = skillsToTeachIds;
+      } else if (skillsToTeachArray.length > 0) {
+        requestData.skill_names_to_teach = skillsToTeachArray;
+      }
+
+      const response = await offersAPI.create(requestData);
+
+      if (__DEV__) {
+        console.log('✅ Offer created:', response);
+      }
+
+      if (response) {
+        // Обновляем список заявок после создания
+        await loadOffers();
+        return response;
+      }
+    } catch (error) {
+      console.error('❌ Error adding offer:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Удалить заявку
+  const deleteOffer = async (offerId) => {
+    try {
+      await offersAPI.delete(offerId);
+      await loadOffers();
+    } catch (error) {
+      console.error('Error deleting offer:', error);
+      throw error;
+    }
+  };
+
+  // Обновить заявку
+  const updateOffer = async (offerId, updatedData) => {
+    try {
+      setLoading(true);
+      
+      // Преобразуем навыки если нужно
+      const dataToSend = {};
+      
+      // Копируем простые поля
+      if (updatedData.title !== undefined) dataToSend.title = updatedData.title;
+      if (updatedData.description !== undefined) dataToSend.description = updatedData.description;
+      if (updatedData.learningFormat !== undefined) dataToSend.learning_format = updatedData.learningFormat;
+      if (updatedData.location !== undefined) dataToSend.location = updatedData.location;
+
+      // Обработка навыков для изучения
+      if (updatedData.skillsToLearn !== undefined) {
+        const skillsToLearnArray = Array.isArray(updatedData.skillsToLearn) 
+          ? updatedData.skillsToLearn 
+          : (typeof updatedData.skillsToLearn === 'string' ? updatedData.skillsToLearn.split(',').map(s => s.trim()).filter(s => s) : []);
+        
+        const skillsToLearnIds = skillsToLearnArray
+          ?.map((skillName) => {
+            const skill = skills.find((s) => {
+              const skillNameLower = (skillName || '').toLowerCase().trim();
+              const sNameLower = (s.name || '').toLowerCase().trim();
+              return sNameLower === skillNameLower;
+            });
+            return skill ? skill.id : null;
+          })
+          .filter((id) => id !== null);
+        
+        if (skillsToLearnIds.length > 0) {
+          dataToSend.skills_to_learn_ids = skillsToLearnIds;
+        } else if (skillsToLearnArray.length > 0) {
+          dataToSend.skill_names_to_learn = skillsToLearnArray;
+        } else {
+          dataToSend.skills_to_learn_ids = [];
+        }
+      }
+
+      // Обработка навыков для обучения
+      if (updatedData.skillsToTeach !== undefined) {
+        const skillsToTeachArray = Array.isArray(updatedData.skillsToTeach) 
+          ? updatedData.skillsToTeach 
+          : (typeof updatedData.skillsToTeach === 'string' ? updatedData.skillsToTeach.split(',').map(s => s.trim()).filter(s => s) : []);
+        
+        const skillsToTeachIds = skillsToTeachArray
+          ?.map((skillName) => {
+            const skill = skills.find((s) => {
+              const skillNameLower = (skillName || '').toLowerCase().trim();
+              const sNameLower = (s.name || '').toLowerCase().trim();
+              return sNameLower === skillNameLower;
+            });
+            return skill ? skill.id : null;
+          })
+          .filter((id) => id !== null);
+        
+        if (skillsToTeachIds.length > 0) {
+          dataToSend.skills_to_teach_ids = skillsToTeachIds;
+        } else if (skillsToTeachArray.length > 0) {
+          dataToSend.skill_names_to_teach = skillsToTeachArray;
+        } else {
+          dataToSend.skills_to_teach_ids = [];
+        }
+      }
+
+      if (updatedData.learningFormat) {
+        dataToSend.learning_format = updatedData.learningFormat;
+        delete dataToSend.learningFormat;
+      }
+
+      await offersAPI.update(offerId, dataToSend);
+      await loadOffers();
+    } catch (error) {
+      console.error('Error updating offer:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Обновить профиль
+  const updateProfile = async (userId, updatedData) => {
+    try {
+      setLoading(true);
+      const response = await authAPI.updateProfile(updatedData);
+      if (response.success && response.user) {
+        setUser(response.user);
+        await AsyncStorage.setItem('user', JSON.stringify(response.user));
+        await loadOffers(); // Обновляем заявки, так как имя пользователя могло измениться
+      }
+      return response;
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Создать чат
+  const createChat = async (participantId, participantName, participantAvatar) => {
+    try {
+      // Проверяем, есть ли уже чат с этим пользователем
+      const existingChat = chats.find((chat) => chat.participantId === participantId.toString());
+      if (existingChat) {
+        return existingChat.id;
+      }
+
+      const response = await chatsAPI.create([parseInt(participantId)]);
+      if (response) {
+        await loadChats();
+        return response.id.toString();
+      }
+    } catch (error) {
+      console.error('Error creating chat:', error);
+      throw error;
+    }
+  };
+
+  // Получить чат
+  const getChat = async (chatId, forceReload = false) => {
+    try {
+      let chat = null;
+      
+      // Всегда загружаем с сервера для актуальных данных
+      const response = await chatsAPI.getById(chatId);
+      if (response) {
+        chat = {
+          id: response.id.toString(),
+          participantId: response.other_participant?.id?.toString() || '',
+          participantName: response.other_participant?.name || response.other_participant?.username || 'Пользователь',
+          participantAvatarSeed: response.other_participant?.avatar_seed || response.other_participant?.username || '',
+          participantAvatar: response.other_participant?.avatar_seed || response.other_participant?.username || 'U',
+          lastMessage: response.last_message?.text || '',
+          timestamp: response.last_message?.created_at || response.updated_at,
+          unreadCount: response.unread_count || 0,
+          messages: [],
+        };
+      }
+
+      // Всегда загружаем сообщения
+      if (chat) {
+        const messagesResponse = await chatsAPI.getMessages(chatId);
+        if (messagesResponse && messagesResponse.messages && Array.isArray(messagesResponse.messages)) {
+          chat.messages = messagesResponse.messages?.map((msg) => ({
+            id: msg.id?.toString() || String(msg.id),
+            text: msg.text || '',
+            senderId: msg.sender?.id?.toString() === user?.id?.toString() ? 'me' : msg.sender?.id?.toString() || '',
+            timestamp: msg.created_at || '',
+            image: msg.image_url || null,
+          }));
+        } else if (messagesResponse && Array.isArray(messagesResponse)) {
+          // Если ответ - прямой массив сообщений
+          chat.messages = messagesResponse.map((msg) => ({
+            id: msg.id?.toString() || String(msg.id),
+            text: msg.text || '',
+            senderId: msg.sender?.id?.toString() === user?.id?.toString() ? 'me' : msg.sender?.id?.toString() || '',
+            timestamp: msg.created_at || '',
+            image: msg.image_url || null,
+          }));
+        }
+      }
+
+      return chat;
+    } catch (error) {
+      console.error('Error getting chat:', error);
+      return null;
+    }
+  };
+
+  // Отправить сообщение
+  const sendMessage = async (chatId, text, imageUri = null) => {
+    try {
+      const response = await messagesAPI.create(chatId, text, imageUri);
+      if (response) {
+        // Обновляем локальное состояние
+        await loadChats();
+        // Возвращаем обновленный чат
+        return await getChat(chatId);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw error;
+    }
+  };
+
+  // Получить мои чаты
+  const getMyChats = () => {
+    return [...chats].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  };
+
+  // Удалить чат
+  const deleteChat = async (chatId) => {
+    try {
+      await chatsAPI.delete(chatId);
+      // Обновляем список чатов
+      await loadChats();
+      return true;
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      throw error;
+    }
+  };
+
+  // Отметить как прочитанное
+  const markAsRead = async (chatId) => {
+    try {
+      // Обновляем локально
+      setChats((prev) => prev.map((chat) => (chat.id === chatId.toString() ? { ...chat, unreadCount: 0 } : chat)));
+
+      // Отмечаем сообщения на сервере (опционально)
+      // Можно добавить вызов API для отметки всех сообщений как прочитанных
+    } catch (error) {
+      console.error('Error marking as read:', error);
+    }
+  };
+
+  // Поиск заявок (локальный поиск по уже загруженным)
   const searchOffers = (query) => {
     if (!query.trim()) return offers;
 
     const searchTerms = query.toLowerCase().trim();
-    
-    // Словарь для транслитерации и синонимов
-    const translitMap = {
-      'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
-      'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-      'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-      'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '',
-      'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
-    };
-
-    const synonymMap = {
-      'js': 'javascript',
-      'reactjs': 'react',
-      'питон': 'python',
-      'пайтон': 'python',
-      'джава': 'java',
-      'ява': 'java',
-      'спринг': 'spring',
-      'дизайн': 'figma',
-      'ui/ux': 'figma',
-      'английский': 'english',
-      'английский язык': 'english',
-      'программирование': 'programming',
-      'кодинг': 'programming',
-      'веб': 'web',
-      'веб разработка': 'web development',
-    };
-
-    // Функция для транслитерации
-    const transliterate = (text) => {
-      return text.split('').map(char => translitMap[char] || char).join('');
-    };
-
-    // Функция для получения синонимов
-    const getSynonyms = (term) => {
-      return synonymMap[term] ? [term, synonymMap[term]] : [term];
-    };
-
-    return offers.filter(offer => {
-      const searchableText = `
-        ${offer.title.toLowerCase()}
-        ${offer.description.toLowerCase()} 
-        ${offer.skillsToLearn.join(' ').toLowerCase()}
-        ${offer.skillsToTeach.join(' ').toLowerCase()}
-        ${offer.learningFormat.toLowerCase()}
-        ${offer.location?.toLowerCase() || ''}
-      `;
-
-      // Разбиваем запрос на слова
-      const queryWords = searchTerms.split(/\s+/);
-      
-      // Проверяем каждое слово запроса
-      return queryWords.some(queryWord => {
-        const synonyms = getSynonyms(queryWord);
-        const transliterated = transliterate(queryWord);
-        
-        // Ищем совпадения в разных вариантах
-        return synonyms.some(synonym => 
-          searchableText.includes(synonym) ||
-          searchableText.includes(transliterated) ||
-          offer.skillsToLearn.some(skill => 
-            skill.toLowerCase().includes(synonym) ||
-            skill.toLowerCase().includes(transliterated)
-          ) ||
-          offer.skillsToTeach.some(skill => 
-            skill.toLowerCase().includes(synonym) ||
-            skill.toLowerCase().includes(transliterated)
-          )
-        );
-      });
-    });
+    return offers.filter(
+      (offer) =>
+        offer.skillsToLearn?.some((skill) => skill.toLowerCase().includes(searchTerms)) ||
+        offer.skillsToTeach?.some((skill) => skill.toLowerCase().includes(searchTerms)) ||
+        offer.title?.toLowerCase().includes(searchTerms),
+    );
   };
 
-  const addOffer = (offerData) => {
-    const newOffer = {
-      ...offerData,
-      id: Math.random().toString(36).substr(2, 9),
-      createdAt: new Date(),
-    };
-    setOffers(prev => [newOffer, ...prev]);
-  };
-
-  const deleteOffer = (offerId) => {
-    setOffers(prev => prev.filter(offer => offer.id !== offerId));
-  };
-
-  const updateOffer = (offerId, updatedData) => {
-    setOffers(prev => prev.map(offer =>
-      offer.id === offerId ? { ...offer, ...updatedData } : offer
-    ));
-  };
-
-  const updateProfile = (userId, updatedData) => {
-    // Обновляем в массиве users
-    setUsers(prev => prev.map(user => 
-      user.id === userId ? { ...user, ...updatedData } : user
-    ));
-    
-    // Обновляем текущего пользователя если это он
-    if (currentUser.id === userId) {
-      setCurrentUser(prev => ({ ...prev, ...updatedData }));
-      
-      // Обновляем имя в заявках пользователя
-      setOffers(prev => prev.map(offer =>
-        offer.userId === userId ? { ...offer, userName: updatedData.name } : offer
-      ));
+  // Установить текущего пользователя (после авторизации)
+  const setCurrentUser = async (userData) => {
+    setUser(userData);
+    setIsAuthenticated(true);
+    await AsyncStorage.setItem('user', JSON.stringify(userData));
+    // Загружаем свежий профиль с сервера после авторизации
+    try {
+      const profileResponse = await authAPI.getProfile();
+      if (profileResponse && profileResponse.success && profileResponse.user) {
+        setUser(profileResponse.user);
+        await AsyncStorage.setItem('user', JSON.stringify(profileResponse.user));
+      }
+    } catch (profileError) {
+      console.warn('Failed to load fresh profile after login:', profileError);
     }
+    await loadOffers();
+    await loadChats();
   };
 
-  const deleteProfile = (userId) => {
-    // Удаляем пользователя из массива
-    setUsers(prev => prev.filter(user => user.id !== userId));
-    
-    // Удаляем заявки пользователя
-    setOffers(prev => prev.filter(offer => offer.userId !== userId));
-    
-    // Удаляем чаты пользователя
-    setChats(prev => prev.filter(chat => 
-      !chat.participants?.includes(userId) && chat.participantId !== userId
-    ));
-    
-    // Если удаляем текущего пользователя, сбрасываем его
-    if (currentUser.id === userId) {
-      setCurrentUser(null);
-    }
-  };
-
-  const addMessage = (chatId, messageData) => {
-    const newMessage = {
-      ...messageData,
-      id: Math.random().toString(36).substr(2, 9),
-      timestamp: new Date(),
-    };
-
-    setChats(prev => prev.map(chat => 
-      chat.id === chatId 
-        ? {
-            ...chat,
-            messages: [...chat.messages, newMessage],
-            lastMessage: newMessage.text,
-            timestamp: new Date(),
-            unreadCount: messageData.senderId === currentUser.id ? 0 : chat.unreadCount + 1,
-          }
-        : chat
-    ));
-  };
-
-  const createChat = (participantId, participantName, participantAvatar) => {
-    const existingChat = chats.find(chat => chat.participantId === participantId);
-    
-    if (existingChat) {
-      return existingChat.id;
-    }
-
-    const chatId = Math.random().toString(36).substr(2, 9);
-    const newChat = {
-      id: chatId,
-      participantId,
-      participantName,
-      participantAvatar,
-      lastMessage: 'Чат начат',
-      timestamp: new Date(),
-      unreadCount: 0,
-      messages: [],
-    };
-    setChats(prev => [newChat, ...prev]);
-    return chatId;
-  };
-
-  // Получить конкретный чат по ID
-  const getChat = (chatId) => {
-    return chats.find(chat => chat.id === chatId);
-  };
-
-  // Отправить сообщение в чат
-  const sendMessage = (chatId, text) => {
-    const messageData = {
-      text,
-      senderId: currentUser.id,
-    };
-    addMessage(chatId, messageData);
-  };
-
-  // Получить чаты текущего пользователя
-  const getMyChats = () => {
-    return chats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  };
-
-  // Отметить сообщения как прочитанные
-  const markAsRead = (chatId) => {
-    setChats(prev => prev.map(chat => 
-      chat.id === chatId ? { ...chat, unreadCount: 0 } : chat
-    ));
+  // Выход
+  const logout = async () => {
+    await authAPI.signout();
+    setUser(null);
+    setIsAuthenticated(false);
+    setOffers([]);
+    setChats([]);
   };
 
   return (
-    <SkillContext.Provider value={{ 
-      offers, 
-      chats, 
-      user: currentUser, // Используем currentUser вместо user
-      users,
-      addOffer, 
-      deleteOffer,
-      updateOffer,
-      addMessage, 
-      createChat,
-      searchOffers,
-      getMyChats,
-      getChat,
-      sendMessage,
-      markAsRead,
-      updateProfile,
-      deleteProfile,
-      setCurrentUser,
-    }}>
+    <SkillContext.Provider
+      value={{
+        offers,
+        chats,
+        user,
+        skills,
+        loading,
+        isAuthenticated,
+        addOffer,
+        deleteOffer,
+        updateOffer,
+        addMessage: sendMessage,
+        createChat,
+        searchOffers,
+        getMyChats,
+        getChat,
+        sendMessage,
+        deleteChat,
+        markAsRead,
+        updateProfile,
+        setCurrentUser,
+        logout,
+        loadOffers,
+        loadChats,
+      }}
+    >
       {children}
     </SkillContext.Provider>
   );

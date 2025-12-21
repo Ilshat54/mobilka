@@ -8,14 +8,21 @@ import {
   Animated,
   SafeAreaView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSkill } from '../context/SkillContext';
 import { useTheme, triggerHaptic } from '../context/ThemeContext';
 
+const blurhash =
+  '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj[';
+
 const OfferDetailScreen = ({ route, navigation }) => {
   const { offer } = route.params || {};
-  const { createChat } = useSkill();
+  const { createChat, user } = useSkill();
   const { colors } = useTheme();
+  
+  // Проверяем, является ли это предложение текущего пользователя
+  const isMyOffer = user?.id && offer?.userId && user.id.toString() === offer.userId.toString();
   
   // Анимации
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -44,17 +51,24 @@ const OfferDetailScreen = ({ route, navigation }) => {
     );
   }
 
-  const handleContact = () => {
+  const handleContact = async () => {
     triggerHaptic();
-    const chatId = createChat(
-      offer.userId, 
-      offer.userName, 
-      offer.userAvatar
-    );
-    navigation.navigate('Chat', { 
-      chatId, 
-      participantName: offer.userName 
-    });
+    try {
+      const chatId = await createChat(
+        offer.userId, 
+        offer.userName, 
+        offer.userAvatar
+      );
+      if (chatId) {
+        navigation.navigate('Chat', { 
+          chatId: String(chatId), 
+          participantName: String(offer.userName || 'Пользователь'),
+          participantAvatarSeed: offer.userAvatarSeed || offer.userAvatar || offer.userName || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error creating chat:', error);
+    }
   };
 
   const getCreatedAt = () => {
@@ -87,7 +101,12 @@ const OfferDetailScreen = ({ route, navigation }) => {
           {/* Информация о пользователе */}
           <View style={styles.userSection}>
             <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-              <Text style={styles.avatarText}>{offer.userAvatar}</Text>
+              <Image
+              source={{ uri: `https://api.dicebear.com/9.x/personas/png?seed=${offer.userAvatarSeed || offer.userAvatar || offer.userName}` }}
+              style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: colors.inputBackground }}
+              placeholder={{ blurhash }}
+              transition={1000}
+            />
             </View>
             <View style={styles.userInfo}>
               <Text style={[styles.userName, { color: colors.text }]}>{offer.userName}</Text>
@@ -108,12 +127,15 @@ const OfferDetailScreen = ({ route, navigation }) => {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Хочет научиться</Text>
             <View style={styles.skillsContainer}>
-              {offer.skillsToLearn && offer.skillsToLearn.map((skill, index) => (
-                <View key={index} style={[styles.skillTag, { backgroundColor: colors.skillTagLearn }]}>
-                  <Ionicons name="arrow-forward-circle" size={16} color={colors.primary} />
-                  <Text style={[styles.skillText, { color: colors.primary }]}>{skill}</Text>
-                </View>
-              ))}
+              {(Array.isArray(offer.skillsToLearn) ? offer.skillsToLearn : []).map((skill, index) => {
+                const skillName = typeof skill === 'object' && skill.name ? skill.name : (typeof skill === 'string' ? skill : String(skill));
+                return (
+                  <View key={index} style={[styles.skillTag, { backgroundColor: colors.skillTagLearn }]}>
+                    <Ionicons name="arrow-forward-circle" size={16} color={colors.primary} />
+                    <Text style={[styles.skillText, { color: colors.primary }]}>{skillName}</Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
 
@@ -121,12 +143,15 @@ const OfferDetailScreen = ({ route, navigation }) => {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Может научить</Text>
             <View style={styles.skillsContainer}>
-              {offer.skillsToTeach && offer.skillsToTeach.map((skill, index) => (
-                <View key={index} style={[styles.skillTag, styles.teachTag, { backgroundColor: colors.skillTagTeach }]}>
-                  <Ionicons name="school" size={16} color={colors.secondary} />
-                  <Text style={[styles.skillText, styles.teachText, { color: colors.secondary }]}>{skill}</Text>
-                </View>
-              ))}
+              {(Array.isArray(offer.skillsToTeach) ? offer.skillsToTeach : []).map((skill, index) => {
+                const skillName = typeof skill === 'object' && skill.name ? skill.name : (typeof skill === 'string' ? skill : String(skill));
+                return (
+                  <View key={index} style={[styles.skillTag, styles.teachTag, { backgroundColor: colors.skillTagTeach }]}>
+                    <Ionicons name="school" size={16} color={colors.secondary} />
+                    <Text style={[styles.skillText, styles.teachText, { color: colors.secondary }]}>{skillName}</Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
 
@@ -163,19 +188,21 @@ const OfferDetailScreen = ({ route, navigation }) => {
         </View>
       </Animated.ScrollView>
 
-      {/* Фиксированная кнопка */}
-      <SafeAreaView style={[styles.footer, { 
-        backgroundColor: colors.surface,
-        borderTopColor: colors.border,
-      }]}>
-        <TouchableOpacity 
-          style={[styles.contactButton, { backgroundColor: colors.primary }]}
-          onPress={handleContact}
-        >
-          <Ionicons name="chatbubble-ellipses" size={20} color="white" />
-          <Text style={styles.contactButtonText}>Написать</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+      {/* Фиксированная кнопка - не показываем для своих предложений */}
+      {!isMyOffer && (
+        <SafeAreaView style={[styles.footer, { 
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        }]}>
+          <TouchableOpacity 
+            style={[styles.contactButton, { backgroundColor: colors.primary }]}
+            onPress={handleContact}
+          >
+            <Ionicons name="chatbubble-ellipses" size={20} color="white" />
+            <Text style={styles.contactButtonText}>Написать</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      )}
     </View>
   );
 };

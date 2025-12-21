@@ -13,22 +13,27 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSkill } from '../context/SkillContext';
 import { useTheme } from '../context/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const blurhash =
+  '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj[';
 
 const ProfileScreen = ({ navigation }) => {
-  const { user, offers, addOffer, deleteOffer, updateOffer, updateProfile, deleteProfile } = useSkill();
+  const { user, offers, addOffer, deleteOffer, updateOffer, updateProfile, logout, skills } = useSkill();
   const { colors, theme, toggleTheme } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingOffer, setIsEditingOffer] = useState(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  
+
   // Анимации
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
   useEffect(() => {
+    AsyncStorage.clear();
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -42,10 +47,10 @@ const ProfileScreen = ({ navigation }) => {
       }),
     ]).start();
   }, []);
-  
+
   const [userInfo, setUserInfo] = useState({
     name: user?.name || '',
-    skills: user?.skills?.join(', ') || '',
+    skills: user?.skillset?.join(', ') || '',
   });
 
   const [newOffer, setNewOffer] = useState({
@@ -66,91 +71,176 @@ const ProfileScreen = ({ navigation }) => {
     location: '',
   });
 
+  // Обновляем userInfo когда меняется user
+  useEffect(() => {
+    if (user) {
+      setUserInfo({
+        name: user.name || '',
+        skills:
+          user.skillset && Array.isArray(user.skillset)
+            ? user.skillset.map((s) => (typeof s === 'object' ? s.name : s)).join(', ')
+            : '',
+      });
+    }
+  }, [user]);
+
   // Функции для профиля
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!userInfo.name.trim()) {
       Alert.alert('Ошибка', 'Введите имя');
       return;
     }
 
+    // Получаем массив навыков и преобразуем их в список id из skills
+    const skillsArray = (userInfo.skills || '')
+      .split(',')
+      .map((skill) => skill.trim())
+      .filter((skill) => skill);
+
+    // Безопасно используем skills из scope компонента
+    let skillsetIds = [];
+    if (skills && skills.length > 0 && skillsArray.length > 0) {
+      skillsetIds = skillsArray
+        .map((skillName) => {
+          const found = skills.find((s) => {
+            const skillNameLower = skillName.toLowerCase().trim();
+            const sNameLower = (s.name || '').toLowerCase().trim();
+            return sNameLower === skillNameLower;
+          });
+          return found ? found.id : null;
+        })
+        .filter((id) => id !== null);
+    }
+
+    // Формируем данные для отправки
     const updatedData = {
       name: userInfo.name,
-      skills: userInfo.skills.split(',').map(skill => skill.trim()).filter(skill => skill),
     };
-    
-    updateProfile(user.id, updatedData);
-    setIsEditing(false);
-    Alert.alert('Успех', 'Профиль обновлен!');
+
+    // Если навыки не были найдены по ID (потому что их нет в БД), отправляем названия
+    // Бэкенд создаст их автоматически
+    if (skillsetIds.length === 0 && skillsArray.length > 0) {
+      updatedData.skill_names = skillsArray;
+    } else {
+      updatedData.skillset_ids = skillsetIds;
+    }
+
+    // Добавляем surname и username только если они есть
+    if (user?.surname) {
+      updatedData.surname = user.surname;
+    }
+    if (user?.username) {
+      updatedData.username = user.username;
+    }
+
+    try {
+      const response = await updateProfile(user?.id, updatedData);
+
+      if (response && response.success && response.user) {
+        setIsEditing(false);
+        // userInfo обновится автоматически через useEffect когда обновится user
+        Alert.alert('Успех', 'Профиль обновлен!');
+      } else {
+        console.error('DEBUG: Update failed, response:', response);
+        Alert.alert('Ошибка', response?.errors ? JSON.stringify(response.errors) : 'Не удалось обновить профиль');
+      }
+    } catch (error) {
+      Alert.alert('Ошибка', 'Не удалось обновить профиль');
+      console.error('Error updating profile:', error);
+    }
   };
 
-  const handleDeleteProfile = () => {
-    deleteProfile(user.id);
-    setShowDeleteModal(false);
-    Alert.alert('Успех', 'Профиль удален');
+  const handleLogout = async () => {
+    Alert.alert('Выход', 'Вы уверены, что хотите выйти?', [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Выйти',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+        },
+      },
+    ]);
   };
 
   // Функции для заявок
-  const handleCreateOffer = () => {
+  const handleCreateOffer = async () => {
     if (!newOffer.title || !newOffer.description || !newOffer.skillsToLearn || !newOffer.skillsToTeach) {
       Alert.alert('Ошибка', 'Заполните все обязательные поля');
       return;
     }
 
     const offerData = {
-      userId: user.id,
-      userName: user.name,
-      userAvatar: user.avatar,
+      userId: user?.id,
+      userName: user?.name,
+      userAvatar: user?.avatar,
       title: newOffer.title,
       description: newOffer.description,
-      skillsToLearn: newOffer.skillsToLearn.split(',').map(skill => skill.trim()),
-      skillsToTeach: newOffer.skillsToTeach.split(',').map(skill => skill.trim()),
+      skillsToLearn: newOffer.skillsToLearn
+        ? newOffer.skillsToLearn
+            .split(',')
+            .map((skill) => skill.trim())
+            .filter((skill) => skill)
+        : [],
+      skillsToTeach: newOffer.skillsToTeach
+        ? newOffer.skillsToTeach
+            .split(',')
+            .map((skill) => skill.trim())
+            .filter((skill) => skill)
+        : [],
       learningFormat: newOffer.learningFormat,
       location: newOffer.location || undefined,
     };
 
-    addOffer(offerData);
-    setNewOffer({
-      title: '',
-      description: '',
-      skillsToLearn: '',
-      skillsToTeach: '',
-      learningFormat: 'online',
-      location: '',
-    });
-    Alert.alert('Успех', 'Заявка создана!');
+    try {
+      await addOffer(offerData);
+      setNewOffer({
+        title: '',
+        description: '',
+        skillsToLearn: '',
+        skillsToTeach: '',
+        learningFormat: 'online',
+        location: '',
+      });
+      Alert.alert('Успех', 'Заявка создана!');
+    } catch (error) {
+      console.error('Error creating offer:', error);
+      Alert.alert('Ошибка', 'Не удалось создать заявку. Проверьте подключение к серверу.');
+    }
   };
 
   const handleDeleteOffer = (offerId) => {
-    Alert.alert(
-      'Удаление заявки',
-      'Вы уверены, что хотите удалить эту заявку?',
-      [
-        { text: 'Отмена', style: 'cancel' },
-        { 
-          text: 'Удалить', 
-          style: 'destructive',
-          onPress: () => {
-            deleteOffer(offerId);
+    Alert.alert('Удаление заявки', 'Вы уверены, что хотите удалить эту заявку?', [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Удалить',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteOffer(offerId);
             Alert.alert('Успех', 'Заявка удалена');
+          } catch (error) {
+            Alert.alert('Ошибка', 'Не удалось удалить заявку');
+            console.error('Error deleting offer:', error);
           }
-        }
-      ]
-    );
+        },
+      },
+    ]);
   };
 
   const handleEditOffer = (offer) => {
     setEditingOffer({
       title: offer.title,
       description: offer.description,
-      skillsToLearn: offer.skillsToLearn.join(', '),
-      skillsToTeach: offer.skillsToTeach.join(', '),
+      skillsToLearn: offer.skillsToLearn && Array.isArray(offer.skillsToLearn) ? offer.skillsToLearn.join(', ') : '',
+      skillsToTeach: offer.skillsToTeach && Array.isArray(offer.skillsToTeach) ? offer.skillsToTeach.join(', ') : '',
       learningFormat: offer.learningFormat,
       location: offer.location || '',
     });
     setIsEditingOffer(offer.id);
   };
 
-  const handleSaveOffer = (offerId) => {
+  const handleSaveOffer = async (offerId) => {
     if (!editingOffer.title || !editingOffer.description) {
       Alert.alert('Ошибка', 'Заполните обязательные поля');
       return;
@@ -159,15 +249,38 @@ const ProfileScreen = ({ navigation }) => {
     const updatedData = {
       title: editingOffer.title,
       description: editingOffer.description,
-      skillsToLearn: editingOffer.skillsToLearn.split(',').map(skill => skill.trim()),
-      skillsToTeach: editingOffer.skillsToTeach.split(',').map(skill => skill.trim()),
+      skillsToLearn: editingOffer.skillsToLearn
+        ? editingOffer.skillsToLearn
+            .split(',')
+            .map((skill) => skill.trim())
+            .filter((skill) => skill)
+        : [],
+      skillsToTeach: editingOffer.skillsToTeach
+        ? editingOffer.skillsToTeach
+            .split(',')
+            .map((skill) => skill.trim())
+            .filter((skill) => skill)
+        : [],
       learningFormat: editingOffer.learningFormat,
-      location: editingOffer.location || undefined,
+      location: editingOffer.location || '',
     };
 
-    updateOffer(offerId, updatedData);
-    setIsEditingOffer(null);
-    Alert.alert('Успех', 'Заявка обновлена!');
+    try {
+      await updateOffer(offerId, updatedData);
+      setIsEditingOffer(null);
+      setEditingOffer({
+        title: '',
+        description: '',
+        skillsToLearn: '',
+        skillsToTeach: '',
+        learningFormat: 'online',
+        location: '',
+      });
+      Alert.alert('Успех', 'Заявка обновлена!');
+    } catch (error) {
+      Alert.alert('Ошибка', 'Не удалось обновить заявку');
+      console.error('Error updating offer:', error);
+    }
   };
 
   const handleCancelEdit = () => {
@@ -182,7 +295,10 @@ const ProfileScreen = ({ navigation }) => {
     });
   };
 
-  const myOffers = offers.filter(offer => offer.userId === user.id);
+  const myOffers = offers.filter((offer) => {
+    if (!user?.id || !offer?.userId) return false;
+    return String(offer.userId) === String(user.id);
+  });
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -191,41 +307,36 @@ const ProfileScreen = ({ navigation }) => {
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Профиль</Text>
           <View style={styles.headerActions}>
-            <TouchableOpacity 
-              style={styles.themeButton}
-              onPress={toggleTheme}
-            >
-              <Ionicons 
-                name={theme === 'dark' ? 'moon' : 'sunny'} 
-                size={20} 
-                color={colors.primary} 
-              />
+            <TouchableOpacity style={styles.themeButton} onPress={toggleTheme}>
+              <Ionicons name={theme === 'dark' ? 'moon' : 'sunny'} size={20} color={colors.primary} />
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.deleteProfileButton}
-              onPress={() => setShowDeleteModal(true)}
-            >
-              <Ionicons name="trash-outline" size={20} color={colors.error} />
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Ionicons name="log-out-outline" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Информация пользователя */}
-        <Animated.View 
+        <Animated.View
           style={[
             styles.profileCard,
-            { 
+            {
               backgroundColor: colors.cardBackground,
               shadowColor: colors.shadow,
             },
             {
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
-            }
+            },
           ]}
         >
           <View style={styles.avatarSection}>
-            <Text style={styles.avatar}>{user.avatar}</Text>
+            <Image
+              source={{ uri: `https://api.dicebear.com/9.x/personas/png?seed=${user?.avatar_seed || user?.username}` }}
+              style={{ width: 70, height: 70, borderRadius: 35, backgroundColor: colors.inputBackground }}
+              placeholder={{ blurhash }}
+              transition={1000}
+            />
             <View style={styles.userInfo}>
               {isEditing ? (
                 <TextInput
@@ -236,9 +347,9 @@ const ProfileScreen = ({ navigation }) => {
                   placeholderTextColor={colors.textTertiary}
                 />
               ) : (
-                <Text style={[styles.userName, { color: colors.text }]}>{user.name}</Text>
+                <Text style={[styles.userName, { color: colors.text }]}>{user?.name}</Text>
               )}
-              <Text style={[styles.userId, { color: colors.textSecondary }]}>ID: {user.id}</Text>
+              <Text style={[styles.userId, { color: colors.textSecondary }]}>ID: {user?.id}</Text>
             </View>
           </View>
 
@@ -246,11 +357,14 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Мои навыки</Text>
             {isEditing ? (
               <TextInput
-                style={[styles.skillsInput, { 
-                  borderColor: colors.border, 
-                  backgroundColor: colors.inputBackground,
-                  color: colors.text 
-                }]}
+                style={[
+                  styles.skillsInput,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.inputBackground,
+                    color: colors.text,
+                  },
+                ]}
                 value={userInfo.skills}
                 onChangeText={(text) => setUserInfo({ ...userInfo, skills: text })}
                 placeholder="Навыки через запятую"
@@ -259,42 +373,39 @@ const ProfileScreen = ({ navigation }) => {
               />
             ) : (
               <View style={styles.skillsList}>
-                {user.skills.map((skill, index) => (
-                  <View key={index} style={[styles.skillTag, { backgroundColor: colors.primaryLight }]}>
-                    <Text style={[styles.skillText, { color: colors.primary }]}>💡 {skill}</Text>
-                  </View>
-                ))}
+                {user?.skillset?.map((skill, index) => {
+                  const skillName = typeof skill === 'object' ? skill.name : skill;
+                  return (
+                    <View key={index} style={[styles.skillTag, { backgroundColor: colors.primaryLight }]}>
+                      <Text style={[styles.skillText, { color: colors.primary }]}>💡 {skillName}</Text>
+                    </View>
+                  );
+                })}
               </View>
             )}
           </View>
 
           <TouchableOpacity
             style={[styles.editButton, { backgroundColor: colors.primary }]}
-            onPress={() => isEditing ? handleSaveProfile() : setIsEditing(true)}
+            onPress={() => (isEditing ? handleSaveProfile() : setIsEditing(true))}
           >
-            <Ionicons 
-              name={isEditing ? 'checkmark' : 'pencil'} 
-              size={16} 
-              color="white" 
-            />
-            <Text style={styles.editButtonText}>
-              {isEditing ? 'Сохранить' : 'Редактировать профиль'}
-            </Text>
+            <Ionicons name={isEditing ? 'checkmark' : 'pencil'} size={16} color="white" />
+            <Text style={styles.editButtonText}>{isEditing ? 'Сохранить' : 'Редактировать профиль'}</Text>
           </TouchableOpacity>
         </Animated.View>
 
         {/* Мои заявки */}
-        <Animated.View 
+        <Animated.View
           style={[
             styles.section,
-            { 
+            {
               backgroundColor: colors.cardBackground,
               shadowColor: colors.shadow,
             },
             {
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
-            }
+            },
           ]}
         >
           <View style={styles.sectionHeader}>
@@ -308,31 +419,44 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={[styles.emptyStateText, { color: colors.textTertiary }]}>У вас пока нет заявок</Text>
             </View>
           ) : (
-            myOffers.map(offer => (
-              <View key={offer.id} style={[styles.offerItem, { 
-                backgroundColor: colors.inputBackground,
-                borderLeftColor: colors.primary 
-              }]}>
+            myOffers?.map((offer) => (
+              <View
+                key={offer.id}
+                style={[
+                  styles.offerItem,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderLeftColor: colors.primary,
+                  },
+                ]}
+              >
                 {isEditingOffer === offer.id ? (
                   // Режим редактирования заявки
                   <View style={styles.editOfferForm}>
                     <TextInput
-                      style={[styles.input, { 
-                        borderColor: colors.border, 
-                        backgroundColor: colors.inputBackground,
-                        color: colors.text 
-                      }]}
+                      style={[
+                        styles.input,
+                        {
+                          borderColor: colors.border,
+                          backgroundColor: colors.inputBackground,
+                          color: colors.text,
+                        },
+                      ]}
                       placeholder="Название заявки"
                       placeholderTextColor={colors.textTertiary}
                       value={editingOffer.title}
                       onChangeText={(text) => setEditingOffer({ ...editingOffer, title: text })}
                     />
                     <TextInput
-                      style={[styles.input, styles.textArea, { 
-                        borderColor: colors.border, 
-                        backgroundColor: colors.inputBackground,
-                        color: colors.text 
-                      }]}
+                      style={[
+                        styles.input,
+                        styles.textArea,
+                        {
+                          borderColor: colors.border,
+                          backgroundColor: colors.inputBackground,
+                          color: colors.text,
+                        },
+                      ]}
                       placeholder="Описание"
                       placeholderTextColor={colors.textTertiary}
                       value={editingOffer.description}
@@ -340,35 +464,41 @@ const ProfileScreen = ({ navigation }) => {
                       multiline
                     />
                     <TextInput
-                      style={[styles.input, { 
-                        borderColor: colors.border, 
-                        backgroundColor: colors.inputBackground,
-                        color: colors.text 
-                      }]}
+                      style={[
+                        styles.input,
+                        {
+                          borderColor: colors.border,
+                          backgroundColor: colors.inputBackground,
+                          color: colors.text,
+                        },
+                      ]}
                       placeholder="Навыки для изучения"
                       placeholderTextColor={colors.textTertiary}
                       value={editingOffer.skillsToLearn}
                       onChangeText={(text) => setEditingOffer({ ...editingOffer, skillsToLearn: text })}
                     />
                     <TextInput
-                      style={[styles.input, { 
-                        borderColor: colors.border, 
-                        backgroundColor: colors.inputBackground,
-                        color: colors.text 
-                      }]}
+                      style={[
+                        styles.input,
+                        {
+                          borderColor: colors.border,
+                          backgroundColor: colors.inputBackground,
+                          color: colors.text,
+                        },
+                      ]}
                       placeholder="Навыки для обучения"
                       placeholderTextColor={colors.textTertiary}
                       value={editingOffer.skillsToTeach}
                       onChangeText={(text) => setEditingOffer({ ...editingOffer, skillsToTeach: text })}
                     />
                     <View style={styles.editActions}>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={[styles.saveButton, { backgroundColor: colors.secondary }]}
                         onPress={() => handleSaveOffer(offer.id)}
                       >
                         <Text style={styles.saveButtonText}>Сохранить</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={[styles.cancelButton, { backgroundColor: colors.textTertiary }]}
                         onPress={handleCancelEdit}
                       >
@@ -379,7 +509,7 @@ const ProfileScreen = ({ navigation }) => {
                 ) : (
                   // Режим просмотра заявки
                   <>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.offerContent}
                       onPress={() => navigation.navigate('OfferDetail', { offer })}
                     >
@@ -392,18 +522,12 @@ const ProfileScreen = ({ navigation }) => {
                         <Text style={[styles.statusText, { color: colors.secondary }]}>Активна</Text>
                       </View>
                     </TouchableOpacity>
-                    
+
                     <View style={styles.offerActions}>
-                      <TouchableOpacity 
-                        style={styles.offerActionButton}
-                        onPress={() => handleEditOffer(offer)}
-                      >
+                      <TouchableOpacity style={styles.offerActionButton} onPress={() => handleEditOffer(offer)}>
                         <Ionicons name="pencil" size={16} color={colors.primary} />
                       </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.offerActionButton}
-                        onPress={() => handleDeleteOffer(offer.id)}
-                      >
+                      <TouchableOpacity style={styles.offerActionButton} onPress={() => handleDeleteOffer(offer.id)}>
                         <Ionicons name="trash" size={16} color={colors.error} />
                       </TouchableOpacity>
                     </View>
@@ -417,26 +541,33 @@ const ProfileScreen = ({ navigation }) => {
         {/* Создание новой заявки */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Создать новую заявку</Text>
-          
+
           <View style={styles.form}>
             <TextInput
-              style={[styles.input, { 
-                borderColor: colors.border, 
-                backgroundColor: colors.inputBackground,
-                color: colors.text 
-              }]}
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                },
+              ]}
               placeholder="Название заявки *"
               placeholderTextColor={colors.textTertiary}
               value={newOffer.title}
               onChangeText={(text) => setNewOffer({ ...newOffer, title: text })}
             />
-            
+
             <TextInput
-              style={[styles.input, styles.textArea, { 
-                borderColor: colors.border, 
-                backgroundColor: colors.inputBackground,
-                color: colors.text 
-              }]}
+              style={[
+                styles.input,
+                styles.textArea,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                },
+              ]}
               placeholder="Описание *"
               placeholderTextColor={colors.textTertiary}
               value={newOffer.description}
@@ -444,37 +575,46 @@ const ProfileScreen = ({ navigation }) => {
               multiline
               numberOfLines={3}
             />
-            
+
             <TextInput
-              style={[styles.input, { 
-                borderColor: colors.border, 
-                backgroundColor: colors.inputBackground,
-                color: colors.text 
-              }]}
-              placeholder="Навыки, которым хочу научиться * (через запятую)"
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Навыки, которым хочу научиться"
               placeholderTextColor={colors.textTertiary}
               value={newOffer.skillsToLearn}
               onChangeText={(text) => setNewOffer({ ...newOffer, skillsToLearn: text })}
             />
-            
+
             <TextInput
-              style={[styles.input, { 
-                borderColor: colors.border, 
-                backgroundColor: colors.inputBackground,
-                color: colors.text 
-              }]}
-              placeholder="Навыки, которым могу научить * (через запятую)"
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Навыки, которым могу научить"
               placeholderTextColor={colors.textTertiary}
               value={newOffer.skillsToTeach}
               onChangeText={(text) => setNewOffer({ ...newOffer, skillsToTeach: text })}
             />
-            
+
             <TextInput
-              style={[styles.input, { 
-                borderColor: colors.border, 
-                backgroundColor: colors.inputBackground,
-                color: colors.text 
-              }]}
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                },
+              ]}
               placeholder="Местоположение (необязательно)"
               placeholderTextColor={colors.textTertiary}
               value={newOffer.location}
@@ -484,33 +624,34 @@ const ProfileScreen = ({ navigation }) => {
             <View style={styles.formatSelector}>
               <Text style={[styles.formatLabel, { color: colors.text }]}>Формат обучения:</Text>
               <View style={styles.formatOptions}>
-                {['online', 'offline', 'both'].map(format => (
+                {['online', 'offline', 'both'].map((format) => (
                   <TouchableOpacity
                     key={format}
                     style={[
                       styles.formatOption,
                       { borderColor: colors.border },
-                      newOffer.learningFormat === format && { 
+                      newOffer.learningFormat === format && {
                         backgroundColor: colors.primary,
-                        borderColor: colors.primary 
-                      }
+                        borderColor: colors.primary,
+                      },
                     ]}
                     onPress={() => setNewOffer({ ...newOffer, learningFormat: format })}
                   >
-                    <Text style={[
-                      styles.formatOptionText,
-                      { color: colors.text },
-                      newOffer.learningFormat === format && { color: 'white' }
-                    ]}>
-                      {format === 'online' ? 'Онлайн' : 
-                       format === 'offline' ? 'Оффлайн' : 'Оба'}
+                    <Text
+                      style={[
+                        styles.formatOptionText,
+                        { color: colors.text },
+                        newOffer.learningFormat === format && { color: 'white' },
+                      ]}
+                    >
+                      {format === 'online' ? 'Онлайн' : format === 'offline' ? 'Оффлайн' : 'Оба'}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.createButton, { backgroundColor: colors.primary }]}
               onPress={handleCreateOffer}
             >
@@ -520,36 +661,6 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
-
-      {/* Модалка удаления профиля */}
-      <Modal
-        visible={showDeleteModal}
-        transparent={true}
-        animationType="fade"
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Удаление профиля</Text>
-            <Text style={[styles.modalText, { color: colors.textSecondary }]}>
-              Вы уверены, что хотите удалить профиль? Все ваши данные и заявки будут удалены.
-            </Text>
-            <View style={styles.modalActions}>
-              <TouchableOpacity 
-                style={[styles.modalButton, { backgroundColor: colors.textTertiary }]}
-                onPress={() => setShowDeleteModal(false)}
-              >
-                <Text style={[styles.cancelButtonText, { color: 'white' }]}>Отмена</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalButton, { backgroundColor: colors.error }]}
-                onPress={handleDeleteProfile}
-              >
-                <Text style={styles.deleteButtonText}>Удалить</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -579,7 +690,7 @@ const styles = StyleSheet.create({
   themeButton: {
     padding: 8,
   },
-  deleteProfileButton: {
+  logoutButton: {
     padding: 8,
   },
   profileCard: {

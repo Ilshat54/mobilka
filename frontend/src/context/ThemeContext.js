@@ -14,9 +14,11 @@ export const triggerHaptic = async () => {
       }
     } else {
       // На мобильных используем expo-haptics
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle?.Medium);
     }
   } catch (error) {
+ 
     // Игнорируем ошибки если хаптик недоступен
     console.log('Haptic not available');
   }
