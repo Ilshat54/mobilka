@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from .models import CustomUser, Skillset, Offer, Chat, Message
+from django.conf import settings
 
 
 class SkillsetSerializer(serializers.ModelSerializer):
@@ -207,12 +208,15 @@ class MessageSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
     def get_image_url(self, obj):
-        if obj.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.image.url)
+        if not obj.image:
+            return None
+
+        request = self.context.get('request')
+        if not request:
             return obj.image.url
-        return None
+
+        scheme = 'http' if settings.MODE == 'DEV' else 'https'
+        return f"{scheme}://{request.get_host()}{obj.image.url}"
 
 
 class ChatSerializer(serializers.ModelSerializer):

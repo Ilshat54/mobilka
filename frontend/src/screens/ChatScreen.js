@@ -19,7 +19,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useSkill } from '../context/SkillContext';
 import { useTheme, triggerHaptic } from '../context/ThemeContext';
-import { API_BASE_URL } from '../services/api';
 
 const blurhash =
   '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj[';
@@ -43,7 +42,7 @@ const ChatScreen = ({ route, navigation }) => {
   }, [chatId]);
 
   useEffect(() => {
-    const url = `${API_BASE_URL}/events/?channel=chat-${chatId}`;
+    const url = `${process.env.EXPO_PUBLIC_API_BASE_URL}/events/?channel=chat-${chatId}`;
 
     const eventSource = new EventSource(url, {
       withCredentials: true,
@@ -210,7 +209,16 @@ const ChatScreen = ({ route, navigation }) => {
                 : [styles.theirMessage, { backgroundColor: colors.inputBackground }],
             ]}
           >
-            {item.image && <Image source={{ uri: item.image }} style={styles.messageImage} resizeMode="cover" />}
+            {item.image && (
+              <Image
+                source={{ uri: item.image }}
+                style={styles.messageImage}
+                placeholder={{ blurhash }}
+                transition={1000}
+                contentFit="cover"
+              />
+            )}
+
             {item.text && (
               <Text style={[styles.messageText, { color: isMyMessage ? 'white' : colors.text }]}>{item.text}</Text>
             )}
@@ -241,12 +249,18 @@ const ChatScreen = ({ route, navigation }) => {
 
         <View style={styles.headerInfo}>
           <Image
-            source={{ uri: `https://api.dicebear.com/9.x/personas/png?seed=${chat?.participantAvatarSeed || participantAvatarSeed || chat?.participantName || participantName || ''}` }}
+            source={{
+              uri: `https://api.dicebear.com/9.x/personas/png?seed=${
+                chat?.participantAvatarSeed || participantAvatarSeed || chat?.participantName || participantName || ''
+              }`,
+            }}
             style={{ width: 36, height: 36, borderRadius: 18, marginRight: 8, backgroundColor: colors.inputBackground }}
             placeholder={{ blurhash }}
             transition={1000}
           />
-          <Text style={[styles.headerName, { color: colors.text }]}>{chat?.participantName || participantName || 'Чат'}</Text>
+          <Text style={[styles.headerName, { color: colors.text }]}>
+            {chat?.participantName || participantName || 'Чат'}
+          </Text>
         </View>
 
         <TouchableOpacity style={styles.moreButton} onPress={handleDeleteChat}>

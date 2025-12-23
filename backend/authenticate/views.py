@@ -374,7 +374,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                 # Обновляем время последнего обновления чата
                 chat.save()
            
-                # Отправляем событие всем участникам чата
+                # Отправляем событие всем участникам чата 
                 send_new_message_event(message.chat.id)
 
                 return message

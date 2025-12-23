@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 from datetime import timedelta
+import os
 from pathlib import Path
 from authenticate.middleware import DisableCSRFMiddleware
 
@@ -192,3 +193,8 @@ if DEBUG:
         "cache-control",
         "last-event-id"
     ]
+
+
+MODE = os.getenv('MODE', 'DEV')
+
+DEBUG = MODE == 'PROD'

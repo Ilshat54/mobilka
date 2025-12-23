@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile.proge",
-    "slug": "mobile.proge",
+    "name": "SkillSwap",
+    "slug": "mobilka",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,13 +17,21 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.eclipsosorganization.mobilka",
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "5dabc3dc-f82b-4967-95f0-27d6df7b673e"
+      }
+    },
+    "owner": "eclipsos-organization"
   }
 }
