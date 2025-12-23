@@ -194,7 +194,8 @@ if DEBUG:
         "last-event-id"
     ]
 
-
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 MODE = os.getenv('MODE', 'DEV')
 
-DEBUG = MODE == 'PROD'
+DEBUG = MODE == 'DEV'

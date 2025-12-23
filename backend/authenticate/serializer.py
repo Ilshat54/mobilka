@@ -215,9 +215,8 @@ class MessageSerializer(serializers.ModelSerializer):
         if not request:
             return obj.image.url
 
-        scheme = 'http' if settings.MODE == 'DEV' else 'https'
+        scheme = 'https' if settings.MODE == 'PROD' else 'http'
         return f"{scheme}://{request.get_host()}{obj.image.url}"
-
 
 class ChatSerializer(serializers.ModelSerializer):
     participants = UserSerializer(many=True, read_only=True)
