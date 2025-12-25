@@ -13,7 +13,7 @@ from .serializer import (
 )
 from .utils import send_new_message_event,send_chat_update_event
 User = get_user_model()
-
+from django.http import HttpResponse
 
 class SignUpView(APIView):
     """
@@ -417,3 +417,7 @@ class SkillsetViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Skillset.objects.all()
     serializer_class = SkillsetSerializer
     permission_classes = [permissions.AllowAny]
+
+
+def ok_view(request):
+    return HttpResponse("OK", status=200)

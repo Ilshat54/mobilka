@@ -9,6 +9,7 @@ from .views import (
     ChatViewSet,
     MessageViewSet,
     SkillsetViewSet,
+    ok_view,
 )
 from django_eventstream import urls as eventstream_urls
 
@@ -23,5 +24,6 @@ urlpatterns = [
     path('auth/signin/', SignInView.as_view(), name='signin'),
     path('auth/profile/', UserProfileView.as_view(), name='profile'),
     path('events/', include(eventstream_urls)),
-    path('', include(router.urls)),
+    path('ok', ok_view, name= 'ok_view'),
+    path('', include(router.urls))
 ]
