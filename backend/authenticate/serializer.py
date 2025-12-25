@@ -208,15 +208,13 @@ class MessageSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
     def get_image_url(self, obj):
-        if not obj.image:
-            return None
-
-        request = self.context.get('request')
-        if not request:
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
             return obj.image.url
-
-        scheme = 'https' if settings.MODE == 'PROD' else 'http'
-        return f"{scheme}://{request.get_host()}{obj.image.url}"
+        
+        return None
 
 class ChatSerializer(serializers.ModelSerializer):
     participants = UserSerializer(many=True, read_only=True)
