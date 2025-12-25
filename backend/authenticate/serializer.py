@@ -3,7 +3,9 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from .models import CustomUser, Skillset, Offer, Chat, Message
 from django.conf import settings
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 class SkillsetSerializer(serializers.ModelSerializer):
     class Meta:
@@ -211,9 +213,10 @@ class MessageSerializer(serializers.ModelSerializer):
         if obj.image:
             request = self.context.get('request')
             if request:
-                return request.build_absolute_uri(obj.image.url)
+                mode = os.environ.get('MODE', 'DEV')
+                protocol = 'https' if mode == 'PROD' else 'http'
+                return request.build_absolute_uri(obj.image.url).replace('http://', f'{protocol}://')
             return obj.image.url
-        
         return None
 
 class ChatSerializer(serializers.ModelSerializer):
