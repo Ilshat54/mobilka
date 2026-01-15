@@ -12,6 +12,7 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -28,12 +29,34 @@ const ChatScreen = ({ route, navigation }) => {
   const { getChat, sendMessage, deleteChat } = useSkill();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const flatListRef = useRef(null);
   const [chat, setChat] = useState(null);
   const [messages, setMessages] = useState([]);
+
+  // поведение клавиатуры
+  const [kbBehavior, setKbBehavior] = useState(
+    Platform.OS === 'ios' ? 'padding' : 'height'
+  );
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const showSub = Keyboard.addListener('keyboardDidShow', () => {
+        setKbBehavior('height'); // поднимаем
+      });
+      const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+        setKbBehavior(undefined); // сбрасываем — убираем лишний padding
+      });
+
+      return () => {
+        showSub.remove();
+        hideSub.remove();
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (chatId) {
@@ -46,9 +69,7 @@ const ChatScreen = ({ route, navigation }) => {
 
     const url = `${process.env.EXPO_PUBLIC_API_BASE_URL}/events/?channel=chat-${chatId}`;
 
-    const eventSource = new EventSource(url, {
-      withCredentials: true,
-    });
+    const eventSource = new EventSource(url, { withCredentials: true });
 
     eventSource.addEventListener('open', () => {
       console.log('Open SSE connection.');
@@ -163,7 +184,7 @@ const ChatScreen = ({ route, navigation }) => {
 
     try {
       const chatIdStr = String(chatId);
-      await sendMessage(chatIdStr, messageText || '', imageToSend);
+      await sendMessage(chatIdStr, messageText || '', imageToSend || undefined);
     } catch (error) {
       setMessage(messageText);
       setSelectedImage(imageToSend);
@@ -256,16 +277,14 @@ const ChatScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.surface }]}
-      edges={['top', 'left', 'right']}
+      edges={['top', 'left', 'right', 'bottom']}
     >
-      {/* Белый фон под статусбаром */}
       <StatusBar
         translucent={false}
-        backgroundColor={colors.surface} // обычно белый
+        backgroundColor={colors.surface}
         barStyle="dark-content"
       />
 
-      {/* Заголовок */}
       <View
         style={[
           styles.header,
@@ -310,11 +329,14 @@ const ChatScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Сообщения + инпут */}
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 90 : 0}
+        behavior={kbBehavior}
+        keyboardVerticalOffset={
+          Platform.OS === 'ios'
+            ? insets.top + 90   // iOS
+            : 0                 // Android без offset, чтобы не было gap
+        }
       >
         <FlatList
           ref={flatListRef}
@@ -323,7 +345,7 @@ const ChatScreen = ({ route, navigation }) => {
           keyExtractor={(item, index) => item.id || index.toString()}
           contentContainerStyle={[
             styles.messagesList,
-            { paddingBottom: insets.bottom + 20 },
+            { paddingBottom: 72 }, // небольшой запас под инпут
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -348,13 +370,16 @@ const ChatScreen = ({ route, navigation }) => {
           }
         />
 
-        {/* Поле ввода */}
         <View
           style={[
             styles.inputContainer,
             {
               backgroundColor: colors.surface,
               borderTopColor: colors.border,
+              paddingBottom:
+                Platform.OS === 'ios'
+                  ? insets.bottom || 8
+                  : 8, // маленький фиксированный отступ на Android
             },
           ]}
         >
@@ -440,10 +465,7 @@ const ChatScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    // без paddingTop: SafeAreaView сам учитывает статусбар
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -451,93 +473,42 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  backButton: {
-    padding: 8,
-  },
-  headerInfo: {
-    flex: 1,
-    marginLeft: 8,
-  },
-  headerName: {
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  headerStatus: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  moreButton: {
-    padding: 8,
-  },
-  chatContainer: {
-    flex: 1,
-  },
-  messagesList: {
-    padding: 16,
-    flexGrow: 1,
-  },
-  dateContainer: {
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  dateText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  messageContainer: {
-    marginBottom: 8,
-  },
-  myMessageContainer: {
-    alignItems: 'flex-end',
-  },
-  theirMessageContainer: {
-    alignItems: 'flex-start',
-  },
+  backButton: { padding: 8 },
+  headerInfo: { flex: 1, marginLeft: 8 },
+  headerName: { fontSize: 17, fontWeight: '600' },
+  headerStatus: { fontSize: 13, marginTop: 2 },
+  moreButton: { padding: 8 },
+  chatContainer: { flex: 1 },
+  messagesList: { padding: 16, flexGrow: 1 },
+  dateContainer: { alignItems: 'center', marginVertical: 16 },
+  dateText: { fontSize: 13, fontWeight: '500' },
+  messageContainer: { marginBottom: 8 },
+  myMessageContainer: { alignItems: 'flex-end' },
+  theirMessageContainer: { alignItems: 'flex-start' },
   messageBubble: {
     maxWidth: '80%',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
   },
-  myMessage: {
-    borderBottomRightRadius: 4,
-  },
-  theirMessage: {
-    borderBottomLeftRadius: 4,
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  messageTime: {
-    fontSize: 11,
-    marginTop: 4,
-    alignSelf: 'flex-end',
-  },
+  myMessage: { borderBottomRightRadius: 4 },
+  theirMessage: { borderBottomLeftRadius: 4 },
+  messageText: { fontSize: 16, lineHeight: 22 },
+  messageTime: { fontSize: 11, marginTop: 4, alignSelf: 'flex-end' },
   emptyChat: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
   },
-  emptyChatText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-  },
-  emptyChatHint: {
-    fontSize: 14,
-    marginTop: 8,
-  },
+  emptyChatText: { fontSize: 18, fontWeight: '600', marginTop: 16 },
+  emptyChatHint: { fontSize: 14, marginTop: 8 },
   inputContainer: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
   },
-  attachButton: {
-    padding: 8,
-    marginRight: 4,
-  },
+  attachButton: { padding: 8, marginRight: 4 },
   input: {
     flex: 1,
     borderRadius: 20,
@@ -559,11 +530,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginHorizontal: 12,
   },
-  imagePreview: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-  },
+  imagePreview: { width: 100, height: 100, borderRadius: 8 },
   removeImageButton: {
     position: 'absolute',
     top: -8,
